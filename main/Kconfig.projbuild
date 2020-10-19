@@ -6,4 +6,16 @@ menu "Example Configuration"
         help
             URL of the broker to connect to
 
+    config BROKER_USERNAME
+        string "Broker Username"
+        default "mqtt"
+        help
+            Username used to connect to MQTT broker
+
+    config BROKER_PASSWORD
+        string "Broker Password"
+        default ""
+        help
+            Password used to connect to MQTT broker
+
 endmenu
