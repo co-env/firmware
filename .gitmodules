@@ -1,0 +1,3 @@
+[submodule "components/esp32_AS7262"]
+	path = components/esp32_AS7262
+	url = https://github.com/freitas-renato/esp32_AS7262.git
