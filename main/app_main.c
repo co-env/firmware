@@ -30,11 +30,20 @@
 #include "esp_log.h"
 #include "mqtt_client.h"
 
+
+
+#include "SGP30.h"
 #include "AS7262.h"
 
 static const char *TAG = "MQTT_EXAMPLE";
 
 float sensorValues[AS7262_NUM_CHANNELS];
+sgp30_t main_sensor;
+
+
+SemaphoreHandle_t xSemaphore = NULL;
+
+
 
 static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
 {
@@ -101,16 +110,22 @@ static void mqtt_app_start(void *arg) {
     vTaskDelay(1000 / portTICK_RATE_MS);
 
     while (1) {
+        // Color sensor payload
         sprintf(payload, "esp1,sensor=\"Color\" v=%2f,b=%2f,g=%2f,y=%2f,o=%2f,r=%2f", 
             sensorValues[AS726x_VIOLET], sensorValues[AS726x_BLUE],
             sensorValues[AS726x_GREEN], sensorValues[AS726x_YELLOW],
             sensorValues[AS726x_ORANGE], sensorValues[AS726x_RED]);
 
+        msg_id = esp_mqtt_client_publish(client, "devices/esp_1", payload, 0, 0, 0);
+        ESP_LOGI(TAG, "Color sensor MQTT Publish, msg_id=%d", msg_id);
+
+        // Air sensor payload
+        sprintf(payload, "esp1,sensor=\"Air\" tvoc=%d,eco2=%d", main_sensor.TVOC, main_sensor.eCO2);
 
         msg_id = esp_mqtt_client_publish(client, "devices/esp_1", payload, 0, 0, 0);
-        ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
-
-        vTaskDelay(2000 / portTICK_RATE_MS);
+        ESP_LOGI(TAG, "Air sensor MQTT Publish, msg_id=%d", msg_id);
+        
+        vTaskDelay(7000 / portTICK_RATE_MS);
     }
 }
 
@@ -118,40 +133,107 @@ static void mqtt_app_start(void *arg) {
 static void color_sensor_task(void *arg) {
     ESP_LOGI(TAG, "Color sensor task init");
     // i2c_master_init();
-    as7262_init();
+    
+    if (xSemaphoreTake(xSemaphore, portMAX_DELAY) == pdTRUE ) {
+        as7262_init();
+        xSemaphoreGive(xSemaphore);
+    }
     
     vTaskDelay(1000 / portTICK_RATE_MS);
 
+    xSemaphoreTake(xSemaphore, portMAX_DELAY);
     set_led_drv_on(true);
+    xSemaphoreGive(xSemaphore);
     vTaskDelay(1000 / portTICK_RATE_MS);
+    
+    xSemaphoreTake(xSemaphore, portMAX_DELAY);
     set_led_drv_on(false);
+    xSemaphoreGive(xSemaphore);
 
+    xSemaphoreTake(xSemaphore, portMAX_DELAY);
     uint8_t temp = read_temperature();
+    xSemaphoreGive(xSemaphore);
 
 
     // start_measurement();
+    xSemaphoreTake(xSemaphore, portMAX_DELAY);
     set_conversion_type(MODE_2);
+    xSemaphoreGive(xSemaphore);
 
     // Changing GAIN 
     control_setup.GAIN = GAIN_64X;
-    virtualWrite(AS726X_CONTROL_SETUP, get_control_setup_hex(control_setup));
+    if (xSemaphoreTake(xSemaphore, portMAX_DELAY ) == pdTRUE ) {
+        virtualWrite(AS726X_CONTROL_SETUP, get_control_setup_hex(control_setup));
+        xSemaphoreGive(xSemaphore);
+    }
 
     while(1) {
-        if (data_ready()) {
-            read_calibrated_values(sensorValues, AS7262_NUM_CHANNELS);
-            temp = read_temperature();
+        if (xSemaphoreTake(xSemaphore, portMAX_DELAY ) == pdTRUE ) {
+            if (data_ready()) {
+                read_calibrated_values(sensorValues, AS7262_NUM_CHANNELS);
+                temp = read_temperature();
+                xSemaphoreGive(xSemaphore);
 
-            ESP_LOGI(TAG, "Device temperature: %d", temp);
-            ESP_LOGI(TAG, " Violet:  %f", sensorValues[AS726x_VIOLET]);
-            ESP_LOGI(TAG, " Blue:  %f", sensorValues[AS726x_BLUE]);
-            ESP_LOGI(TAG, " Green:  %f", sensorValues[AS726x_GREEN]);
-            ESP_LOGI(TAG, " Yellow:  %f", sensorValues[AS726x_YELLOW]);
-            ESP_LOGI(TAG, " Orange:  %f", sensorValues[AS726x_ORANGE]);
-            ESP_LOGI(TAG, " Red:  %f", sensorValues[AS726x_RED]);
-            ESP_LOGI(TAG, " ------------------ ");
+
+                ESP_LOGI(TAG, "Device temperature: %d", temp);
+                ESP_LOGI(TAG, " Violet:  %f", sensorValues[AS726x_VIOLET]);
+                ESP_LOGI(TAG, " Blue:  %f", sensorValues[AS726x_BLUE]);
+                ESP_LOGI(TAG, " Green:  %f", sensorValues[AS726x_GREEN]);
+                ESP_LOGI(TAG, " Yellow:  %f", sensorValues[AS726x_YELLOW]);
+                ESP_LOGI(TAG, " Orange:  %f", sensorValues[AS726x_ORANGE]);
+                ESP_LOGI(TAG, " Red:  %f", sensorValues[AS726x_RED]);
+                ESP_LOGI(TAG, " ------------------ ");
+            } else {
+                xSemaphoreGive(xSemaphore);
+            }
         }
 
-        vTaskDelay(100 / portTICK_RATE_MS);
+        vTaskDelay(5000 / portTICK_RATE_MS);
+    }
+}
+
+static void air_sensor_task(void *arg) {
+    ESP_LOGI(TAG, "SGP30 main task initializing...");
+
+    if (xSemaphoreTake(xSemaphore, portMAX_DELAY ) == pdTRUE ) {
+        sgp30_init(&main_sensor);
+        xSemaphoreGive(xSemaphore);
+    }
+
+    // SGP30 needs to be read every 1s and sends TVOC = 400 14 times when initializing
+    for (int i = 0; i < 14; i++) {
+        vTaskDelay(1000 / portTICK_RATE_MS);
+
+        if (xSemaphoreTake(xSemaphore, portMAX_DELAY ) == pdTRUE ) {
+            sgp30_IAQ_measure(&main_sensor);
+            xSemaphoreGive(xSemaphore);
+        }
+
+        ESP_LOGI(TAG, "SGP30 Calibrating... TVOC: %d,  eCO2: %d",  main_sensor.TVOC, main_sensor.eCO2);
+    }
+
+    // Read initial baselines 
+    uint16_t eco2_baseline, tvoc_baseline;
+
+
+    if (xSemaphoreTake(xSemaphore, portMAX_DELAY ) == pdTRUE ) {
+        sgp30_get_IAQ_baseline(&main_sensor, &eco2_baseline, &tvoc_baseline);
+        xSemaphoreGive(xSemaphore);
+    }
+    
+    ESP_LOGI(TAG, "BASELINES - TVOC: %d,  eCO2: %d",  tvoc_baseline, eco2_baseline);
+
+
+    ESP_LOGI(TAG, "SGP30 main task is running...");
+    while(1) {
+        vTaskDelay(1000 / portTICK_RATE_MS);
+
+        if (xSemaphoreTake(xSemaphore, portMAX_DELAY ) == pdTRUE ) {
+            sgp30_IAQ_measure(&main_sensor);
+            xSemaphoreGive(xSemaphore);
+        }
+
+        ESP_LOGI(TAG, "TVOC: %d,  eCO2: %d",  main_sensor.TVOC, main_sensor.eCO2);
     }
 }
 
@@ -178,7 +260,12 @@ void app_main(void) {
      */
     ESP_ERROR_CHECK(example_connect());
 
+    xSemaphore = xSemaphoreCreateMutex();
+
+    xSemaphoreGive(xSemaphore);
+
 
     xTaskCreate(mqtt_app_start, "mqtt_main_task", 1024 * 3, (void *)0, 10, NULL);
-    xTaskCreate(color_sensor_task, "i2c_main_test_task", 1024 * 2, (void *)0, 20, NULL);
+    xTaskCreate(color_sensor_task, "color_sensor_main_task", 1024 * 2, (void *)0, 20, NULL);
+    xTaskCreate(air_sensor_task, "air_sensor_main_task", 1024 * 2, (void *)0, 15, NULL);
 }
