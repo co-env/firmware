@@ -106,10 +106,13 @@ int8_t main_i2c_read(uint8_t reg_addr, uint8_t *reg_data, uint32_t len, void *in
 
     i2c_master_start(cmd);
     i2c_master_write_byte(cmd, (addr << 1) | I2C_MASTER_WRITE, ACK_CHECK_EN);
-    i2c_master_write_byte(cmd, reg_addr, ACK_CHECK_EN);
+    
+    if(reg_addr != 0xff){
+        i2c_master_write_byte(cmd, reg_addr, ACK_CHECK_EN);
+        i2c_master_start(cmd);
+        i2c_master_write_byte(cmd, (addr << 1) | I2C_MASTER_READ, ACK_CHECK_EN);
+    }
 
-    i2c_master_start(cmd);
-    i2c_master_write_byte(cmd, (addr << 1) | I2C_MASTER_READ, ACK_CHECK_EN);
     if (len > 1) {
         i2c_master_read(cmd, reg_data, len, ACK_VAL);
     }
@@ -142,12 +145,12 @@ int8_t main_i2c_write(uint8_t reg_addr, uint8_t *reg_data, uint32_t len, void *i
     i2c_cmd_handle_t cmd = i2c_cmd_link_create();
     i2c_master_start(cmd);
     i2c_master_write_byte(cmd, (addr << 1) | I2C_MASTER_WRITE, ACK_CHECK_EN);
-    i2c_master_write_byte(cmd, reg_addr, ACK_CHECK_EN);
+    
+    if(reg_addr != 0xff){
+        i2c_master_write_byte(cmd, reg_addr, ACK_CHECK_EN);
+    }
 
     i2c_master_write(cmd, reg_data, len, ACK_CHECK_EN);
-    // for (int i = 0; i < len; i++) {
-    //     i2c_master_write_byte(cmd, reg_data[i], ACK_CHECK_EN);
-    // }
     i2c_master_stop(cmd);
 
     esp_err_t ret = i2c_master_cmd_begin(i2c_num, cmd, 1000 / portTICK_RATE_MS);
@@ -316,7 +319,7 @@ static void air_sensor_task(void *arg) {
     ESP_LOGI(TAG, "SGP30 main task initializing...");
 
     if (xSemaphoreTake(xSemaphore, portMAX_DELAY ) == pdTRUE ) {
-        sgp30_init(&main_sensor);
+        sgp30_init(&main_sensor, main_i2c_read, main_i2c_write);
         xSemaphoreGive(xSemaphore);
     }
 
