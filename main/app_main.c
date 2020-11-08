@@ -58,8 +58,8 @@ static const char *TAG = "MQTT_EXAMPLE";
 
 i2c_port_t i2c_num = I2C_MASTER_NUM;
 
-float sensorValues[AS7262_NUM_CHANNELS];
-sgp30_t main_sensor;
+as7262_dev_t as7262_main_sensor;
+sgp30_dev_t sgp30_main_sensor;
 
 SemaphoreHandle_t xSemaphore = NULL;
 
@@ -94,37 +94,37 @@ esp_err_t i2c_master_driver_initialize(void) {
  * @return ESP_OK/BME280_OK if reading was successful
  */
 int8_t main_i2c_read(uint8_t reg_addr, uint8_t *reg_data, uint32_t len, void *intf_ptr) { // *intf_ptr = dev->intf_ptr
-    int8_t rslt = 0; /* Return 0 for Success, non-zero for failure */
+    int8_t ret = 0; /* Return 0 for Success, non-zero for failure */
 
     if (len == 0) {
         return ESP_OK;
     }
 
-    uint8_t addr = *(uint8_t*)intf_ptr;
+    uint8_t chip_addr = *(uint8_t*)intf_ptr;
     
     i2c_cmd_handle_t cmd = i2c_cmd_link_create();
 
     i2c_master_start(cmd);
-    i2c_master_write_byte(cmd, (addr << 1) | I2C_MASTER_WRITE, ACK_CHECK_EN);
     
-    if(reg_addr != 0xff){
+    if (reg_addr != 0xff) {
+        i2c_master_write_byte(cmd, (chip_addr << 1) | I2C_MASTER_WRITE, ACK_CHECK_EN);
         i2c_master_write_byte(cmd, reg_addr, ACK_CHECK_EN);
         i2c_master_start(cmd);
-        i2c_master_write_byte(cmd, (addr << 1) | I2C_MASTER_READ, ACK_CHECK_EN);
     }
+    
+    i2c_master_write_byte(cmd, (chip_addr << 1) | I2C_MASTER_READ, ACK_CHECK_EN);
 
     if (len > 1) {
-        i2c_master_read(cmd, reg_data, len, ACK_VAL);
+        i2c_master_read(cmd, reg_data, len - 1, ACK_VAL);
     }
     i2c_master_read_byte(cmd, reg_data + len - 1, NACK_VAL);
     i2c_master_stop(cmd);
 
-    esp_err_t ret = i2c_master_cmd_begin(i2c_num, cmd, 1000 / portTICK_RATE_MS);
+    ret = i2c_master_cmd_begin(i2c_num, cmd, 1000 / portTICK_RATE_MS);
     
     i2c_cmd_link_delete(cmd);
-    rslt = ret;
-    return rslt;
-
+    
+    return ret;
 }
 
 /**
@@ -138,7 +138,7 @@ int8_t main_i2c_read(uint8_t reg_addr, uint8_t *reg_data, uint32_t len, void *in
  * @return ESP_OK/BME280_OK if writing was successful
  */
 int8_t main_i2c_write(uint8_t reg_addr, uint8_t *reg_data, uint32_t len, void *intf_ptr) {
-    int8_t rslt = 0; /* Return 0 for Success, non-zero for failure */
+    int8_t ret = 0; /* Return 0 for Success, non-zero for failure */
 
     uint8_t addr = *(uint8_t*)intf_ptr;
 
@@ -153,13 +153,11 @@ int8_t main_i2c_write(uint8_t reg_addr, uint8_t *reg_data, uint32_t len, void *i
     i2c_master_write(cmd, reg_data, len, ACK_CHECK_EN);
     i2c_master_stop(cmd);
 
-    esp_err_t ret = i2c_master_cmd_begin(i2c_num, cmd, 1000 / portTICK_RATE_MS);
+    ret = i2c_master_cmd_begin(i2c_num, cmd, 1000 / portTICK_RATE_MS);
     
     i2c_cmd_link_delete(cmd);
     
-    rslt = ret;
-    return rslt;
-
+    return ret;
 }
 
 /******** MQTT ********/
@@ -211,15 +209,10 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
 
 /**< MQTT main task */
 static void mqtt_app_start(void *arg) {
-    // esp_mqtt_client_config_t mqtt_cfg = {
-    //     .uri = CONFIG_BROKER_URL,
-        // .username = CONFIG_BROKER_USERNAME,
-        // .password = CONFIG_BROKER_PASSWORD
-    // };
     esp_mqtt_client_config_t mqtt_cfg = {
-        .uri = "mqtt://ec2-54-94-236-59.sa-east-1.compute.amazonaws.com",
-        .username = "esp32",
-        .password = "Senhamqtt1"
+        .uri = CONFIG_BROKER_URL,
+        .username = CONFIG_BROKER_USERNAME,
+        .password = CONFIG_BROKER_PASSWORD
     };
 
     esp_mqtt_client_handle_t client = esp_mqtt_client_init(&mqtt_cfg);
@@ -235,15 +228,15 @@ static void mqtt_app_start(void *arg) {
     while (1) {
         // Color sensor payload
         sprintf(payload, "esp1,sensor=\"Color\" v=%2f,b=%2f,g=%2f,y=%2f,o=%2f,r=%2f", 
-            sensorValues[AS726x_VIOLET], sensorValues[AS726x_BLUE],
-            sensorValues[AS726x_GREEN], sensorValues[AS726x_YELLOW],
-            sensorValues[AS726x_ORANGE], sensorValues[AS726x_RED]);
+            as7262_main_sensor.calibrated_values[AS726x_VIOLET], as7262_main_sensor.calibrated_values[AS726x_BLUE],
+            as7262_main_sensor.calibrated_values[AS726x_GREEN], as7262_main_sensor.calibrated_values[AS726x_YELLOW],
+            as7262_main_sensor.calibrated_values[AS726x_ORANGE], as7262_main_sensor.calibrated_values[AS726x_RED]);
 
         msg_id = esp_mqtt_client_publish(client, "devices/esp_1", payload, 0, 0, 0);
         ESP_LOGI(TAG, "Color sensor MQTT Publish, msg_id=%d", msg_id);
 
         // Air sensor payload
-        sprintf(payload, "esp1,sensor=\"Air\" tvoc=%d,eco2=%d", main_sensor.TVOC, main_sensor.eCO2);
+        sprintf(payload, "esp1,sensor=\"Air\" tvoc=%d,eco2=%d", sgp30_main_sensor.TVOC, sgp30_main_sensor.eCO2);
 
         msg_id = esp_mqtt_client_publish(client, "devices/esp_1", payload, 0, 0, 0);
         ESP_LOGI(TAG, "Air sensor MQTT Publish, msg_id=%d", msg_id);
@@ -256,55 +249,53 @@ static void mqtt_app_start(void *arg) {
 static void color_sensor_task(void *arg) {
     ESP_LOGI(TAG, "Color sensor task init");
     // i2c_master_init();
-    
     if (xSemaphoreTake(xSemaphore, portMAX_DELAY) == pdTRUE ) {
-        as7262_init(main_i2c_read, main_i2c_write);
+        as7262_init(&as7262_main_sensor, (as7262_read_fptr_t)main_i2c_read, (as7262_write_fptr_t)main_i2c_write);
         xSemaphoreGive(xSemaphore);
     }
     
     vTaskDelay(1000 / portTICK_RATE_MS);
 
     xSemaphoreTake(xSemaphore, portMAX_DELAY);
-    set_led_drv_on(true);
+    as7262_set_led_drv_on(&as7262_main_sensor, true);
     xSemaphoreGive(xSemaphore);
     vTaskDelay(1000 / portTICK_RATE_MS);
     
     xSemaphoreTake(xSemaphore, portMAX_DELAY);
-    set_led_drv_on(false);
+    as7262_set_led_drv_on(&as7262_main_sensor, false);
     xSemaphoreGive(xSemaphore);
 
     xSemaphoreTake(xSemaphore, portMAX_DELAY);
-    uint8_t temp = read_temperature();
+    uint8_t temp = as7262_read_temperature(&as7262_main_sensor);
     xSemaphoreGive(xSemaphore);
 
 
     // start_measurement();
     xSemaphoreTake(xSemaphore, portMAX_DELAY);
-    set_conversion_type(MODE_2);
+    as7262_set_conversion_type(&as7262_main_sensor, MODE_2);
     xSemaphoreGive(xSemaphore);
 
     // Changing GAIN 
-    control_setup.GAIN = GAIN_64X;
     if (xSemaphoreTake(xSemaphore, portMAX_DELAY ) == pdTRUE ) {
-        virtualWrite(AS726X_CONTROL_SETUP, get_control_setup_hex(control_setup));
+        as7262_set_gain(&as7262_main_sensor, GAIN_64X);
         xSemaphoreGive(xSemaphore);
     }
 
     while(1) {
         if (xSemaphoreTake(xSemaphore, portMAX_DELAY ) == pdTRUE ) {
-            if (data_ready()) {
-                read_calibrated_values(sensorValues, AS7262_NUM_CHANNELS);
-                temp = read_temperature();
+            if (as7262_data_ready(&as7262_main_sensor)) {
+                as7262_read_calibrated_values(&as7262_main_sensor, AS7262_NUM_CHANNELS);
+                temp = as7262_read_temperature(&as7262_main_sensor);
                 xSemaphoreGive(xSemaphore);
 
 
                 ESP_LOGI(TAG, "Device temperature: %d", temp);
-                ESP_LOGI(TAG, " Violet:  %f", sensorValues[AS726x_VIOLET]);
-                ESP_LOGI(TAG, " Blue:  %f", sensorValues[AS726x_BLUE]);
-                ESP_LOGI(TAG, " Green:  %f", sensorValues[AS726x_GREEN]);
-                ESP_LOGI(TAG, " Yellow:  %f", sensorValues[AS726x_YELLOW]);
-                ESP_LOGI(TAG, " Orange:  %f", sensorValues[AS726x_ORANGE]);
-                ESP_LOGI(TAG, " Red:  %f", sensorValues[AS726x_RED]);
+                ESP_LOGI(TAG, " Violet:  %f", as7262_main_sensor.calibrated_values[AS726x_VIOLET]);
+                ESP_LOGI(TAG, " Blue:    %f", as7262_main_sensor.calibrated_values[AS726x_BLUE]);
+                ESP_LOGI(TAG, " Green:   %f", as7262_main_sensor.calibrated_values[AS726x_GREEN]);
+                ESP_LOGI(TAG, " Yellow:  %f", as7262_main_sensor.calibrated_values[AS726x_YELLOW]);
+                ESP_LOGI(TAG, " Orange:  %f", as7262_main_sensor.calibrated_values[AS726x_ORANGE]);
+                ESP_LOGI(TAG, " Red:     %f", as7262_main_sensor.calibrated_values[AS726x_RED]);
                 ESP_LOGI(TAG, " ------------------ ");
             } else {
                 xSemaphoreGive(xSemaphore);
@@ -319,7 +310,7 @@ static void air_sensor_task(void *arg) {
     ESP_LOGI(TAG, "SGP30 main task initializing...");
 
     if (xSemaphoreTake(xSemaphore, portMAX_DELAY ) == pdTRUE ) {
-        sgp30_init(&main_sensor, main_i2c_read, main_i2c_write);
+        sgp30_init(&sgp30_main_sensor, (sgp30_read_fptr_t)main_i2c_read, (sgp30_write_fptr_t)main_i2c_write);
         xSemaphoreGive(xSemaphore);
     }
 
@@ -328,11 +319,11 @@ static void air_sensor_task(void *arg) {
         vTaskDelay(1000 / portTICK_RATE_MS);
 
         if (xSemaphoreTake(xSemaphore, portMAX_DELAY ) == pdTRUE ) {
-            sgp30_IAQ_measure(&main_sensor);
+            sgp30_IAQ_measure(&sgp30_main_sensor);
             xSemaphoreGive(xSemaphore);
         }
 
-        ESP_LOGI(TAG, "SGP30 Calibrating... TVOC: %d,  eCO2: %d",  main_sensor.TVOC, main_sensor.eCO2);
+        ESP_LOGI(TAG, "SGP30 Calibrating... TVOC: %d,  eCO2: %d",  sgp30_main_sensor.TVOC, sgp30_main_sensor.eCO2);
     }
 
     // Read initial baselines 
@@ -340,7 +331,7 @@ static void air_sensor_task(void *arg) {
 
 
     if (xSemaphoreTake(xSemaphore, portMAX_DELAY ) == pdTRUE ) {
-        sgp30_get_IAQ_baseline(&main_sensor, &eco2_baseline, &tvoc_baseline);
+        sgp30_get_IAQ_baseline(&sgp30_main_sensor, &eco2_baseline, &tvoc_baseline);
         xSemaphoreGive(xSemaphore);
     }
     
@@ -352,11 +343,11 @@ static void air_sensor_task(void *arg) {
         vTaskDelay(1000 / portTICK_RATE_MS);
 
         if (xSemaphoreTake(xSemaphore, portMAX_DELAY ) == pdTRUE ) {
-            sgp30_IAQ_measure(&main_sensor);
+            sgp30_IAQ_measure(&sgp30_main_sensor);
             xSemaphoreGive(xSemaphore);
         }
 
-        ESP_LOGI(TAG, "TVOC: %d,  eCO2: %d",  main_sensor.TVOC, main_sensor.eCO2);
+        ESP_LOGI(TAG, "TVOC: %d,  eCO2: %d",  sgp30_main_sensor.TVOC, sgp30_main_sensor.eCO2);
     }
 }
 
