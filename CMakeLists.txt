@@ -8,6 +8,8 @@ set(EXTRA_COMPONENT_DIRS $ENV{IDF_PATH}/examples/common_components/protocol_exam
 
 list(APPEND EXTRA_COMPONENT_DIRS components/esp32_AS7262)
 list(APPEND EXTRA_COMPONENT_DIRS components/esp32_SGP30)
+# list(APPEND EXTRA_COMPONENT_DIRS components/BME280)
+# list(APPEND EXTRA_COMPONENT_DIRS components/Microfone)
 
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
