@@ -29,11 +29,12 @@
 
 #include "esp_log.h"
 #include "mqtt_client.h"
-
-
+#include "driver/i2c.h"
 
 #include "SGP30.h"
 #include "AS7262.h"
+#include "esp32_bme280.h"
+#include "microfone.h"
 
 
 #define _I2C_NUMBER(num) I2C_NUM_##num
@@ -60,6 +61,7 @@ i2c_port_t i2c_num = I2C_MASTER_NUM;
 
 as7262_dev_t as7262_main_sensor;
 sgp30_dev_t sgp30_main_sensor;
+const adc_channel_t mic_channel = ADC_CHANNEL_6;
 
 SemaphoreHandle_t xSemaphore = NULL;
 
@@ -161,8 +163,7 @@ int8_t main_i2c_write(uint8_t reg_addr, uint8_t *reg_data, uint32_t len, void *i
 }
 
 /******** MQTT ********/
-static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
-{
+static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event) {
     esp_mqtt_client_handle_t client = event->client;
     int msg_id;
     // your_context_t *context = event->context;
@@ -207,6 +208,18 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     mqtt_event_handler_cb(event_data);
 }
 
+/**
+ * @brief generic delay function for BME280 library
+ */
+void main_delay_us(uint32_t period, void *intf_ptr) {
+    /**
+     * Return control or wait,
+     * for a period amount of milliseconds
+     */
+    TickType_t delay = period / (1000 * portTICK_PERIOD_MS);
+    vTaskDelay(delay);
+}
+
 /**< MQTT main task */
 static void mqtt_app_start(void *arg) {
     esp_mqtt_client_config_t mqtt_cfg = {
@@ -244,6 +257,8 @@ static void mqtt_app_start(void *arg) {
         vTaskDelay(7000 / portTICK_RATE_MS);
     }
 }
+
+/****** Sensores *******/
 
 /**< AS7262 main task */
 static void color_sensor_task(void *arg) {
@@ -351,6 +366,56 @@ static void air_sensor_task(void *arg) {
     }
 }
 
+
+static void bme280_sensor_task(void *arg) {
+    ESP_LOGI(TAG, "SGP30 main task initializing...");
+    esp_err_t erro = ESP_OK;
+
+    struct bme280_data comp_data; //TODO: mudar dado para global, usado por outras tasks
+
+    //* init bme280
+    if (xSemaphoreTake(xSemaphore, portMAX_DELAY ) == pdTRUE ) {
+        erro = bme280_sensor_init(main_i2c_read, main_i2c_write, main_delay_us);
+        xSemaphoreGive(xSemaphore);
+    }
+
+    if(erro == BME280_OK) printf("Init check\n");
+    else printf("Could not init BME280\n");
+
+    if (xSemaphoreTake(xSemaphore, portMAX_DELAY ) == pdTRUE ) {
+        erro = bme280_config();
+        xSemaphoreGive(xSemaphore);
+    }
+
+    if(erro == BME280_OK) printf("Config check\n");
+    else printf("Could not config BME280\n");
+
+    while (1) {
+        vTaskDelay(1000 / portTICK_RATE_MS);
+
+        if (xSemaphoreTake(xSemaphore, portMAX_DELAY ) == pdTRUE ) {
+            erro = bme280_meas_forcedmode(&comp_data);
+            xSemaphoreGive(xSemaphore);
+        }
+        if(erro != BME280_OK) printf("Could not measure :(");
+    }
+
+}
+
+static void sound_sensor_task(void *arg) {
+    ESP_LOGI(TAG, "Mic main task initializing...");
+
+    if (xSemaphoreTake(xSemaphore, portMAX_DELAY ) == pdTRUE ) {
+        adc1_config(mic_channel);
+        xSemaphoreGive(xSemaphore);
+    }
+
+    while(1) {
+        (void)get_voltage_variation(mic_channel);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
 void app_main(void) {
     ESP_LOGI(TAG, "[APP] Startup..");
     ESP_LOGI(TAG, "[APP] Free memory: %d bytes", esp_get_free_heap_size());
@@ -383,4 +448,7 @@ void app_main(void) {
     xTaskCreate(mqtt_app_start, "mqtt_main_task", 1024 * 3, (void *)0, 10, NULL);
     xTaskCreate(color_sensor_task, "color_sensor_main_task", 1024 * 2, (void *)0, 20, NULL);
     xTaskCreate(air_sensor_task, "air_sensor_main_task", 1024 * 2, (void *)0, 15, NULL);
+    xTaskCreate(bme280_sensor_task, "bme280_sensor_main_task", 1024 * 2, (void *)0, 15, NULL);
+    xTaskCreate(sound_sensor_task, "sound_sensor_main_task", 1024 * 2, (void *)0, 15, NULL);
+
 }
