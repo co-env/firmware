@@ -37,8 +37,7 @@ static const char *TAG = "MQTT_EXAMPLE";
 
 
 /******** MQTT ********/
-static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
-{
+static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event) {
     esp_mqtt_client_handle_t client = event->client;
     int msg_id;
     // your_context_t *context = event->context;
@@ -81,6 +80,18 @@ static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data) {
     ESP_LOGD(TAG, "Event dispatched from event loop base=%s, event_id=%d", base, event_id);
     mqtt_event_handler_cb(event_data);
+}
+
+/**
+ * @brief generic delay function for BME280 library
+ */
+void main_delay_us(uint32_t period, void *intf_ptr) {
+    /**
+     * Return control or wait,
+     * for a period amount of milliseconds
+     */
+    TickType_t delay = period / (1000 * portTICK_PERIOD_MS);
+    vTaskDelay(delay);
 }
 
 /**< MQTT main task */
@@ -152,4 +163,7 @@ void app_main(void) {
     xTaskCreate(mqtt_app_start, "mqtt_main_task", 1024 * 3, (void *)0, 10, NULL);
     xTaskCreate(color_sensor_task, "color_sensor_main_task", 1024 * 2, (void *)0, 20, NULL);
     xTaskCreate(air_sensor_task, "air_sensor_main_task", 1024 * 2, (void *)0, 15, NULL);
+    xTaskCreate(bme280_sensor_task, "bme280_sensor_main_task", 1024 * 2, (void *)0, 15, NULL);
+    xTaskCreate(sound_sensor_task, "sound_sensor_main_task", 1024 * 2, (void *)0, 15, NULL);
+
 }
