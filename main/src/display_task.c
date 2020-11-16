@@ -13,10 +13,6 @@
 #include <time.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "ssd1306.h"
-#include "ssd1306_draw.h"
-#include "ssd1306_font.h"
-#include "ssd1306_default_if.h"
 
 #include "esp_log.h"
 
