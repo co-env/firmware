@@ -10,3 +10,6 @@
 [submodule "components/Microfone"]
 	path = components/Microfone
 	url = https://github.com/co-env/Microfone
+[submodule "components/tarablessd1306"]
+	path = components/tarablessd1306
+	url = https://github.com/TaraHoleInIt/tarablessd1306

@@ -35,6 +35,7 @@
 #include "AS7262.h"
 #include "esp32_bme280.h"
 #include "microfone.h"
+#include "display_task.h"
 
 
 #define _I2C_NUMBER(num) I2C_NUM_##num
@@ -62,6 +63,9 @@ i2c_port_t i2c_num = I2C_MASTER_NUM;
 as7262_dev_t as7262_main_sensor;
 sgp30_dev_t sgp30_main_sensor;
 const adc_channel_t mic_channel = ADC_CHANNEL_6;
+
+struct bme280_data comp_data; //TODO: mudar dado para global, usado por outras tasks
+
 
 SemaphoreHandle_t xSemaphore = NULL;
 
@@ -371,16 +375,19 @@ static void bme280_sensor_task(void *arg) {
     ESP_LOGI(TAG, "SGP30 main task initializing...");
     esp_err_t erro = ESP_OK;
 
-    struct bme280_data comp_data; //TODO: mudar dado para global, usado por outras tasks
+    // struct bme280_data comp_data; //TODO: mudar dado para global, usado por outras tasks
 
     //* init bme280
     if (xSemaphoreTake(xSemaphore, portMAX_DELAY ) == pdTRUE ) {
-        erro = bme280_sensor_init(main_i2c_read, main_i2c_write, main_delay_us);
+        erro = bme280_sensor_init((bme280_read_fptr_t)main_i2c_read, (bme280_write_fptr_t)main_i2c_write, (bme280_delay_us_fptr_t)main_delay_us);
         xSemaphoreGive(xSemaphore);
     }
 
-    if(erro == BME280_OK) printf("Init check\n");
-    else printf("Could not init BME280\n");
+    if (erro != BME280_OK) {
+        ESP_LOGE(TAG, "Failed to init BME280, error: %d", erro);
+    } else {
+        ESP_LOGI(TAG, "BME280 Initialized, error: %d", erro);
+    }
 
     if (xSemaphoreTake(xSemaphore, portMAX_DELAY ) == pdTRUE ) {
         erro = bme280_config();
@@ -396,8 +403,16 @@ static void bme280_sensor_task(void *arg) {
         if (xSemaphoreTake(xSemaphore, portMAX_DELAY ) == pdTRUE ) {
             erro = bme280_meas_forcedmode(&comp_data);
             xSemaphoreGive(xSemaphore);
+
+            ESP_LOGI(TAG, "Temperature: %d",comp_data.temperature);
+            ESP_LOGI(TAG, "Pressure: %d",comp_data.pressure);
+            ESP_LOGI(TAG, "Humidity: %d",comp_data.humidity);
+
         }
         if(erro != BME280_OK) printf("Could not measure :(");
+        
+        //! Test only
+        update_display_data(comp_data.temperature, sgp30_main_sensor.TVOC, sgp30_main_sensor.eCO2);
     }
 
 }
@@ -443,6 +458,8 @@ void app_main(void) {
     xSemaphore = xSemaphoreCreateMutex();
 
     xSemaphoreGive(xSemaphore);
+
+    xTaskCreate( FontDisplayTask, "FontDisplayTask", 4096, NULL, 1, NULL );
 
 
     xTaskCreate(mqtt_app_start, "mqtt_main_task", 1024 * 3, (void *)0, 10, NULL);
