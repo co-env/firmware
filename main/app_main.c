@@ -109,6 +109,8 @@ static void mqtt_app_start(void *arg) {
     int msg_id;
     char payload[100];
 
+    float _t;
+
     
     vTaskDelay(1000 / portTICK_RATE_MS);
 
@@ -127,6 +129,12 @@ static void mqtt_app_start(void *arg) {
 
         msg_id = esp_mqtt_client_publish(client, "devices/esp_1", payload, 0, 0, 0);
         ESP_LOGI(TAG, "Air sensor MQTT Publish, msg_id=%d", msg_id);
+
+        memset(payload, 0, strlen(payload));
+        
+        _t = ((int)(comp_data.temperature / 100)) + (comp_data.temperature % 100) * 0.01;
+        sprintf(payload, "esp1,sensor=\"Temperature\" temperature=%.2f", _t);
+        msg_id = esp_mqtt_client_publish(client, "devices/esp_1", payload, 0, 0, 0);
         
         vTaskDelay(7000 / portTICK_RATE_MS);
     }
@@ -159,6 +167,9 @@ void app_main(void) {
     xSemaphore = xSemaphoreCreateMutex();
 
     xSemaphoreGive(xSemaphore);
+
+    xTaskCreate( FontDisplayTask, "FontDisplayTask", 4096, NULL, 1, NULL );
+
 
     xTaskCreate(mqtt_app_start, "mqtt_main_task", 1024 * 3, (void *)0, 10, NULL);
     xTaskCreate(color_sensor_task, "color_sensor_main_task", 1024 * 2, (void *)0, 20, NULL);
