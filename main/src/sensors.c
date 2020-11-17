@@ -1,5 +1,11 @@
 #include "sensors.h"
 
+static const char *TAG = "SENSORS";
+
+adc_channel_t mic_channel = ADC_CHANNEL_6;
+
+SemaphoreHandle_t xSemaphore = NULL;
+
 
 /******** I2C ********/
 i2c_port_t i2c_num = I2C_MASTER_NUM;
@@ -261,7 +267,7 @@ void bme280_sensor_task(void *arg) {
         }
         
         //! Test only
-        update_display_data(comp_data.temperature, sgp30_main_sensor.TVOC, sgp30_main_sensor.eCO2);
+        // update_display_data(comp_data.temperature, sgp30_main_sensor.TVOC, sgp30_main_sensor.eCO2);
     }
 
 }

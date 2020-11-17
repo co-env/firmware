@@ -1,5 +1,8 @@
 #include "network.h"
 
+static const char *TAG = "MQTT";
+
+
 /******** MQTT ********/
 static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event) {
     esp_mqtt_client_handle_t client = event->client;

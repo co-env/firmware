@@ -29,8 +29,7 @@
 #include "sensors.h"
 #include "network.h"
 
-
-
+static const char *TAG = "MAIN";
 
 void app_main(void) {
     ESP_LOGI(TAG, "[APP] Startup..");
@@ -60,8 +59,7 @@ void app_main(void) {
 
     xSemaphoreGive(xSemaphore);
 
-    xTaskCreate( FontDisplayTask, "FontDisplayTask", 4096, NULL, 1, NULL );
-
+    // xTaskCreate( FontDisplayTask, "FontDisplayTask", 4096, NULL, 1, NULL );
 
     xTaskCreate(mqtt_app_start, "mqtt_main_task", 1024 * 3, (void *)0, 10, NULL);
     xTaskCreate(color_sensor_task, "color_sensor_main_task", 1024 * 2, (void *)0, 20, NULL);

@@ -1,9 +1,14 @@
+#ifndef SENSORS_H
+#define SENSORS_H
+
 #include <stdio.h>
 #include "driver/i2c.h"
 #include "sdkconfig.h"
 
 #include "SGP30.h"
 #include "AS7262.h"
+#include "esp32_bme280.h"
+#include "microfone.h"
 
 #define _I2C_NUMBER(num) I2C_NUM_##num
 #define I2C_NUMBER(num) _I2C_NUMBER(num)
@@ -25,10 +30,11 @@
 
 as7262_dev_t as7262_main_sensor;
 sgp30_dev_t sgp30_main_sensor;
-const adc_channel_t mic_channel = ADC_CHANNEL_6;
+adc_channel_t mic_channel;
 struct bme280_data comp_data; 
 
-SemaphoreHandle_t xSemaphore = NULL;
+extern SemaphoreHandle_t xSemaphore;
+
 
 /** I2C **/ 
 esp_err_t i2c_master_driver_initialize(void);
@@ -39,4 +45,5 @@ void air_sensor_task(void *arg);
 void bme280_sensor_task(void *arg);
 void sound_sensor_task(void *arg);
 
+#endif // SENSORS_H
 /*@*/
