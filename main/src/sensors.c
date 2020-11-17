@@ -99,6 +99,18 @@ int8_t main_i2c_write(uint8_t reg_addr, uint8_t *reg_data, uint32_t len, void *i
     return ret;
 }
 
+/**
+ * @brief generic delay function for BME280 library
+ */
+void main_delay_us(uint32_t period, void *intf_ptr) {
+    /**
+     * Return control or wait,
+     * for a period amount of milliseconds
+     */
+    TickType_t delay = period / (1000 * portTICK_PERIOD_MS);
+    vTaskDelay(delay);
+}
+
 /****** Sensores *******/
 
 /**< AS7262 main task */
@@ -211,33 +223,45 @@ void bme280_sensor_task(void *arg) {
     ESP_LOGI(TAG, "SGP30 main task initializing...");
     esp_err_t erro = ESP_OK;
 
-    struct bme280_data comp_data; //TODO: mudar dado para global, usado por outras tasks
 
     //* init bme280
     if (xSemaphoreTake(xSemaphore, portMAX_DELAY ) == pdTRUE ) {
-        erro = bme280_sensor_init(main_i2c_read, main_i2c_write, main_delay_us);
+        erro = bme280_sensor_init((bme280_read_fptr_t)main_i2c_read, (bme280_write_fptr_t)main_i2c_write, (bme280_delay_us_fptr_t)main_delay_us);
         xSemaphoreGive(xSemaphore);
     }
 
-    if(erro == BME280_OK) printf("Init check\n");
-    else printf("Could not init BME280\n");
+    if (erro != BME280_OK) {
+        ESP_LOGE(TAG, "Failed to init BME280, error: %d", erro);
+    } else {
+        ESP_LOGI(TAG, "BME280 Initialized, error: %d", erro);
+    }
 
     if (xSemaphoreTake(xSemaphore, portMAX_DELAY ) == pdTRUE ) {
         erro = bme280_config();
         xSemaphoreGive(xSemaphore);
     }
-
+    
     if(erro == BME280_OK) printf("Config check\n");
     else printf("Could not config BME280\n");
-
+    
     while (1) {
         vTaskDelay(1000 / portTICK_RATE_MS);
 
         if (xSemaphoreTake(xSemaphore, portMAX_DELAY ) == pdTRUE ) {
             erro = bme280_meas_forcedmode(&comp_data);
             xSemaphoreGive(xSemaphore);
+
+            ESP_LOGI(TAG, "Temperature: %d",comp_data.temperature);
+            ESP_LOGI(TAG, "Pressure: %d",comp_data.pressure);
+            ESP_LOGI(TAG, "Humidity: %d",comp_data.humidity);
+
         }
-        if(erro != BME280_OK) printf("Could not measure :(");
+        if(erro != BME280_OK){    
+            printf("Could not measure :(");
+        }
+        
+        //! Test only
+        update_display_data(comp_data.temperature, sgp30_main_sensor.TVOC, sgp30_main_sensor.eCO2);
     }
 
 }

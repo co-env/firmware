@@ -26,6 +26,7 @@
 as7262_dev_t as7262_main_sensor;
 sgp30_dev_t sgp30_main_sensor;
 const adc_channel_t mic_channel = ADC_CHANNEL_6;
+struct bme280_data comp_data; 
 
 SemaphoreHandle_t xSemaphore = NULL;
 
