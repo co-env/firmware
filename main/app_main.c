@@ -28,6 +28,7 @@
 
 #include "sensors.h"
 #include "network.h"
+#include "feedback.h"
 
 static const char *TAG = "MAIN";
 
@@ -66,5 +67,8 @@ void app_main(void) {
     xTaskCreate(air_sensor_task, "air_sensor_main_task", 1024 * 2, (void *)0, 15, NULL);
     xTaskCreate(bme280_sensor_task, "bme280_sensor_main_task", 1024 * 2, (void *)0, 15, NULL);
     xTaskCreate(sound_sensor_task, "sound_sensor_main_task", 1024 * 2, (void *)0, 15, NULL);
+
+    gpio_evt_queue = xQueueCreate(10, sizeof(uint32_t)); 
+    xTaskCreate(gpio_task_example, "gpio_task_example", 2048, NULL, 10, NULL); //start gpio task
 
 }

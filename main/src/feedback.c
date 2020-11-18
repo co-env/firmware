@@ -5,7 +5,7 @@
  * https://opensource.org/licenses/MIT
  */
 
-#include "display_task.h"
+#include "feedback.h"
 
 #include <stdio.h>
 #include <stdbool.h>
@@ -16,6 +16,49 @@
 
 #include "esp_log.h"
 
+/*** Push buttons ***/ 
+xQueueHandle gpio_evt_queue = NULL;
+
+static void IRAM_ATTR gpio_isr_handler(void* arg) { //??
+    uint32_t gpio_num = (uint32_t) arg;
+    xQueueSendFromISR(gpio_evt_queue, &gpio_num, NULL);
+}
+
+static void bt_config(void){
+    gpio_config_t io_conf; //> generic gpio config struct
+    
+    io_conf.pin_bit_mask = GPIO_INPUT_PIN_SEL; //bit mask of the pins, use GPIO4/5 here
+    io_conf.intr_type = GPIO_INTR_POSEDGE; //interrupt of rising edge //? acho que tanto faz
+    io_conf.mode = GPIO_MODE_INPUT; //set as input mode    
+    io_conf.pull_up_en = 0; //pins 34-39 do not have internal pull up/down  ////enable pull-up mode
+
+    gpio_config(&io_conf);
+
+    gpio_install_isr_service(ESP_INTR_FLAG_DEFAULT); //install gpio isr service
+    gpio_isr_handler_add(BUTTON_0, gpio_isr_handler, (void*) BUTTON_0); //hook isr handler for specific gpio pin
+    gpio_isr_handler_add(BUTTON_1, gpio_isr_handler, (void*) BUTTON_1); //hook isr handler for specific gpio pin
+    gpio_isr_handler_add(BUTTON_2, gpio_isr_handler, (void*) BUTTON_2); //hook isr handler for specific gpio pin
+}
+
+void gpio_task_example(void* arg) {
+    uint32_t io_num;
+
+    bt_config();
+
+    for(;;) {
+        if(xQueueReceive(gpio_evt_queue, &io_num, portMAX_DELAY)) {
+            printf("GPIO[%d] intr, val: %d\n", io_num, gpio_get_level(io_num));
+        }
+    }
+}
+
+/****
+ * MAIN
+ * gpio_evt_queue = xQueueCreate(10, sizeof(uint32_t)); 
+ * xTaskCreate(gpio_task_example, "gpio_task_example", 2048, NULL, 10, NULL); //start gpio task
+ */
+
+/*** Display OLED ***/
 static const char* TAG = "DISPLAY-EXAMPLE";
 
 static const int I2CDisplayAddress = 0x3C;
