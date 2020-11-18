@@ -59,6 +59,7 @@ build/
 
 # Specific SDKCONFIG
 sdkconfig*
+!sdkconfig.defaults
 
 ### vscode ###
 .vscode/*
