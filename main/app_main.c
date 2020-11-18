@@ -29,6 +29,12 @@
 #include "sensors.h"
 #include "network.h"
 
+#include "sdkconfig.h"
+
+#include "mesh_device_app.h"
+
+#include "display_task.h"
+
 static const char *TAG = "MAIN";
 
 void app_main(void) {
@@ -44,24 +50,34 @@ void app_main(void) {
     esp_log_level_set("TRANSPORT", ESP_LOG_VERBOSE);
     esp_log_level_set("OUTBOX", ESP_LOG_VERBOSE);
 
-    ESP_ERROR_CHECK(nvs_flash_init());
+    esp_err_t err = nvs_flash_init();
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        err = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(err);
+
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     ESP_ERROR_CHECK(i2c_master_driver_initialize());
 
-    /* This helper function configures Wi-Fi or Ethernet, as selected in menuconfig.
-     * Read "Establishing Wi-Fi or Ethernet Connection" section in
-     * examples/protocols/README.md for more information about this function.
-     */
-    ESP_ERROR_CHECK(example_connect());
+    err = ble_mesh_device_init();
+    if (err) {
+        ESP_LOGE(TAG, "Bluetooth mesh init failed (err 0x%06x)", err);
+    }
 
     xSemaphore = xSemaphoreCreateMutex();
-
     xSemaphoreGive(xSemaphore);
 
-    // xTaskCreate( FontDisplayTask, "FontDisplayTask", 4096, NULL, 1, NULL );
 
-    xTaskCreate(mqtt_app_start, "mqtt_main_task", 1024 * 3, (void *)0, 10, NULL);
+    #if CONFIG_COENV_NODE_TYPE_GATEWAY
+    xTaskCreate(gateway_device_task, "gateway_main_task", 1024 * 3, (void *)0, 30, NULL);
+    #elif CONFIG_COENV_NODE_TYPE_SENSOR
+    xTaskCreate(node_device_task, "node_main_task", 1024 * 3, (void *)0, 30, NULL);
+    #endif
+    
+    xTaskCreate( FontDisplayTask, "FontDisplayTask", 4096, NULL, 1, NULL );
+
     xTaskCreate(color_sensor_task, "color_sensor_main_task", 1024 * 2, (void *)0, 20, NULL);
     xTaskCreate(air_sensor_task, "air_sensor_main_task", 1024 * 2, (void *)0, 15, NULL);
     xTaskCreate(bme280_sensor_task, "bme280_sensor_main_task", 1024 * 2, (void *)0, 15, NULL);
