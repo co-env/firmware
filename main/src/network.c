@@ -120,16 +120,15 @@ void gateway_device_task(void *arg) {
         .username = CONFIG_BROKER_USERNAME,
         .password = CONFIG_BROKER_PASSWORD
     };
-
-    /* This helper function configures Wi-Fi or Ethernet, as selected in menuconfig.
-     * Read "Establishing Wi-Fi or Ethernet Connection" section in
-     * examples/protocols/README.md for more information about this function.
-     */
-    ESP_ERROR_CHECK(example_connect());
+    
+    //* Syncronized queue where received data is put by the Server Model 
+    ble_mesh_received_data_queue = xQueueCreate(5, sizeof(model_sensor_data_t));
+    ESP_LOGW(TAG, "Queue initialization done");
 
     esp_mqtt_client_handle_t client = esp_mqtt_client_init(&mqtt_cfg);
     esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, mqtt_event_handler, client);
     esp_mqtt_client_start(client);
+    ESP_LOGW(TAG, "MQTT initialization done.");
 
     vTaskDelay(1000 / portTICK_RATE_MS);
 
