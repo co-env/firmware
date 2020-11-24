@@ -1,21 +1,6 @@
-/**
- * Copyright (c) 2017-2018 Tara Keeling
- * 
- * This software is released under the MIT License.
- * https://opensource.org/licenses/MIT
- */
+#include "display.h"
 
-#include "display_task.h"
-
-#include <stdio.h>
-#include <stdbool.h>
-#include <string.h>
-#include <time.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-
-#include "esp_log.h"
-
+/*** Display OLED ***/
 static const char* TAG = "DISPLAY-EXAMPLE";
 
 static const int I2CDisplayAddress = 0x3C;
@@ -46,8 +31,8 @@ static bool SSD1306_i2c_bus_init(struct SSD1306_Device *Device) {
     return true;
 }
 
-void FontDisplayTask(void* arg) {
-    // struct SSD1306_Device* Display = ( struct SSD1306_Device* ) arg;
+/******** TELAS ********/ 
+void display_start(void) {
 
     char temperature[20];
     char voc[20];
@@ -79,9 +64,37 @@ void FontDisplayTask(void* arg) {
             ESP_LOGI(TAG, "Display updated!");
             vTaskDelay(pdMS_TO_TICKS(1000));
     }
-
-    vTaskDelete(NULL);
 }
+
+//todo: Telas de perguntas - feedback
+void temp_question_screen(void) {
+
+    char question[] = "A temperatura esta confortavel?";
+
+    if (SSD1306_i2c_bus_init(&Display)) {
+            SSD1306_SetFont(&Display, &Font_liberation_mono_9x15);
+
+            SSD1306_Clear(&Display, SSD_COLOR_BLACK);
+
+            SSD1306_FontDrawAnchoredString(&Display, TextAnchor_North , "COEnv", SSD_COLOR_WHITE);
+
+
+            SSD1306_SetFont(&Display, &Font_droid_sans_mono_7x13);
+            
+            SSD1306_FontDrawString(&Display, 0, 25, question, SSD_COLOR_WHITE);
+            
+            SSD1306_Update(&Display);
+
+            ESP_LOGI(TAG, "Display updated!");
+            vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+void temp_descr_question_screen(void){}
+void sound_question_screen(void){}
+void light_question_screen(void){}
+void light_descr_question_screen(void){}
+void off_screen(void){}
 
 void update_display_data(uint32_t temperature, uint16_t tvoc, uint16_t eco2) {
     char temperature_string[20];

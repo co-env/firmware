@@ -28,6 +28,7 @@
 
 #include "sensors.h"
 #include "network.h"
+#include "feedback.h"
 
 #include "sdkconfig.h"
 
@@ -89,4 +90,18 @@ void app_main(void) {
     xTaskCreate(air_sensor_task, "air_sensor_main_task", 1024 * 2, (void *)0, 15, NULL);
     xTaskCreate(bme280_sensor_task, "bme280_sensor_main_task", 1024 * 2, (void *)0, 15, NULL);
     xTaskCreate(sound_sensor_task, "sound_sensor_main_task", 1024 * 2, (void *)0, 15, NULL);
+    // display_start();
+    // xTaskCreate( FontDisplayTask, "FontDisplayTask", 4096, NULL, 1, NULL );
+
+    // xTaskCreate(mqtt_app_start, "mqtt_main_task", 1024 * 3, (void *)0, 10, NULL);
+    xTaskCreate(color_sensor_task, "color_sensor_main_task", 1024 * 2, (void *)0, 20, NULL);
+    // xTaskCreate(air_sensor_task, "air_sensor_main_task", 1024 * 2, (void *)0, 15, NULL);
+    // xTaskCreate(bme280_sensor_task, "bme280_sensor_main_task", 1024 * 2, (void *)0, 15, NULL);
+    // xTaskCreate(sound_sensor_task, "sound_sensor_main_task", 1024 * 2, (void *)0, 15, NULL);
+    timer_queue = xQueueCreate(10, sizeof(timer_event_t));
+
+    gpio_evt_queue = xQueueCreate(10, sizeof(uint32_t)); 
+    xTaskCreate(feedback_task, "feedback_task", 2048, NULL, 10, NULL); //start gpio task
+    // xTaskCreate(gpio_task_example, "gpio_task_example", 2048, NULL, 10, NULL); //start gpio task
+
 }
