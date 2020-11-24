@@ -257,9 +257,9 @@ void bme280_sensor_task(void *arg) {
             erro = bme280_meas_forcedmode(&comp_data);
             xSemaphoreGive(xSemaphore);
 
-            ESP_LOGI(TAG, "Temperature: %d",comp_data.temperature);
-            ESP_LOGI(TAG, "Pressure: %d",comp_data.pressure);
-            ESP_LOGI(TAG, "Humidity: %d",comp_data.humidity);
+            ESP_LOGI(TAG, "Temperature: %f",comp_data.temperature);
+            ESP_LOGI(TAG, "Pressure: %f",comp_data.pressure);
+            ESP_LOGI(TAG, "Humidity: %f",comp_data.humidity);
 
         }
         if(erro != BME280_OK){    

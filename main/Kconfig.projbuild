@@ -1,21 +1,30 @@
-menu "Example Configuration"
+menu "Main Firmware Configuration"
 
-    config BROKER_URL
-        string "Broker URL"
-        default "mqtt://mqtt.eclipse.org"
+    config DEVICE_ID
+        string "Device ID"
+        default "esp_1"
         help
-            URL of the broker to connect to
+            Unique device identifier that will be sent to the dashboard
 
-    config BROKER_USERNAME
-        string "Broker Username"
-        default "mqtt"
-        help
-            Username used to connect to MQTT broker
 
-    config BROKER_PASSWORD
-        string "Broker Password"
-        default ""
-        help
-            Password used to connect to MQTT broker
+    menu "MQTT Connection Parameters"
+        config BROKER_URL
+            string "Broker URL"
+            default "mqtt://mqtt.eclipse.org"
+            help
+                URL of the broker to connect to
+
+        config BROKER_USERNAME
+            string "Broker Username"
+            default "mqtt"
+            help
+                Username used to connect to MQTT broker
+
+        config BROKER_PASSWORD
+            string "Broker Password"
+            default ""
+            help
+                Password used to connect to MQTT broker
+    endmenu
 
 endmenu

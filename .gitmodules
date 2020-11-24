@@ -13,3 +13,6 @@
 [submodule "components/tarablessd1306"]
 	path = components/tarablessd1306
 	url = https://github.com/TaraHoleInIt/tarablessd1306
+[submodule "components/ble-mesh-model"]
+	path = components/ble-mesh-model
+	url = https://github.com/co-env/ble-mesh-custom-sensor-model.git
