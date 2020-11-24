@@ -7,14 +7,86 @@
 
 #include "feedback.h"
 
-#include <stdio.h>
-#include <stdbool.h>
-#include <string.h>
-#include <time.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
+/*** Timer ***/
+xQueueHandle timer_queue = NULL;
 
-#include "esp_log.h"
+/**
+ ** Timer group0 ISR handler
+ *
+ * @param para - pointer to timer_idx 
+ * 
+ *? Note:
+ * We don't call the timer API here because they are not declared with IRAM_ATTR.
+ * If we're okay with the timer irq not being serviced while SPI flash cache is disabled,
+ * we can allocate this interrupt without the ESP_INTR_FLAG_IRAM flag and use the normal API.
+ */
+void IRAM_ATTR timer_group0_isr(void *para) {
+    timer_spinlock_take(TIMER_GROUP_0);
+    
+    int timer_idx = (int) para;
+
+    /* Retrieve the interrupt status(?) and the counter value
+       from the timer that reported the interrupt */
+    uint32_t timer_intr = timer_group_get_intr_status_in_isr(TIMER_GROUP_0);
+
+    /* Prepare basic event data
+       that will be then sent back to the main program task */
+    timer_event_t evt;
+    evt.timer_group = TIMER_GROUP_0;
+    evt.timer_idx = timer_idx;
+
+    /* Clear the interrupt
+       and update the alarm time for the timer with without reload */
+    if (timer_intr & TIMER_INTR_T0) {
+        evt.type = TEST_WITH_RELOAD; 
+        timer_group_clr_intr_status_in_isr(TIMER_GROUP_0, TIMER_0);
+    } else if (timer_intr & TIMER_INTR_T1) {
+        evt.type = TEST_WITH_RELOAD; 
+        timer_group_clr_intr_status_in_isr(TIMER_GROUP_0, TIMER_1);
+
+    } else {
+        evt.type = -1; // not supported event type
+    }
+
+    /* After the alarm has been triggered
+      we need enable it again, so it is triggered the next time */
+    timer_group_enable_alarm_in_isr(TIMER_GROUP_0, timer_idx);
+
+    /* Now just send the event data back to the main program task */
+    xQueueSendFromISR(timer_queue, &evt, NULL);
+
+    timer_spinlock_give(TIMER_GROUP_0);
+}
+
+/**
+ * @brief Initialize selected timer of the timer group 0
+ *
+ * @param timer_idx - the timer number to initialize
+ * @param timer_interval_sec - the interval of alarm to set
+ */
+static void tg0_timer_init(int timer_idx, double timer_interval_sec) {
+    /* Select and initialize basic parameters of the timer */
+    timer_config_t config = {
+        .divider = TIMER_DIVIDER,
+        .counter_dir = TIMER_COUNT_UP,
+        .counter_en = TIMER_PAUSE, // only starts when timer_start() is called
+        .alarm_en = TIMER_ALARM_EN,
+        .auto_reload = true,
+    }; // default clock source is APB
+    timer_init(TIMER_GROUP_0, timer_idx, &config);
+
+    /* Timer's counter will initially start from value below.
+       Also, if auto_reload is set, this value will be automatically reload on alarm */
+    timer_set_counter_value(TIMER_GROUP_0, timer_idx, 0x00000000ULL);
+
+    /* Configure the alarm value and the interrupt on alarm. */
+    timer_set_alarm_value(TIMER_GROUP_0, timer_idx, timer_interval_sec * TIMER_SCALE);
+    timer_enable_intr(TIMER_GROUP_0, timer_idx);
+    timer_isr_register(TIMER_GROUP_0, timer_idx, timer_group0_isr,
+                       (void *) timer_idx, ESP_INTR_FLAG_IRAM, NULL);
+
+    timer_start(TIMER_GROUP_0, timer_idx);
+}
 
 /*** Push buttons ***/ 
 xQueueHandle gpio_evt_queue = NULL;
@@ -42,7 +114,7 @@ static void bt_config(void){
 
 void gpio_task_example(void* arg) {
     uint32_t io_num;
-
+    
     bt_config();
 
     for(;;) {
@@ -53,110 +125,98 @@ void gpio_task_example(void* arg) {
 }
 
 /****
- * MAIN
+ * GPIO IN MAIN
  * gpio_evt_queue = xQueueCreate(10, sizeof(uint32_t)); 
  * xTaskCreate(gpio_task_example, "gpio_task_example", 2048, NULL, 10, NULL); //start gpio task
  */
 
-/*** Display OLED ***/
-static const char* TAG = "DISPLAY-EXAMPLE";
+/*** Máquina de Estados ***/
 
-static const int I2CDisplayAddress = 0x3C;
-static const int I2CDisplayWidth = 128;
-static const int I2CDisplayHeight = 64;
-static const int I2CResetPin = -1;
-
-struct SSD1306_Device Display;
-
-const struct SSD1306_FontDef* FontList[ ] = {
-    &Font_droid_sans_fallback_11x13,
-    &Font_droid_sans_fallback_15x17,
-    &Font_droid_sans_fallback_24x28,
-    &Font_droid_sans_mono_7x13,
-    &Font_droid_sans_mono_13x24,
-    &Font_droid_sans_mono_16x31,
-    &Font_liberation_mono_9x15,
-    &Font_liberation_mono_13x21,
-    &Font_liberation_mono_17x30,
-    NULL
+// tabela relacionando os estados às suas execuções
+state_func_t* const state_table[ NUM_STATES ] = {
+    do_state_initial, do_state_temp, do_state_temp_descr,
+    do_state_sound, do_state_light, do_state_light_descr, do_state_final
 };
 
 
-static bool SSD1306_i2c_bus_init(struct SSD1306_Device *Device) {
-    assert(SSD1306_I2CMasterInitDefault() == true);
-    assert(SSD1306_I2CMasterAttachDisplayDefault(Device, I2CDisplayWidth, I2CDisplayHeight, I2CDisplayAddress, I2CResetPin) == true);
-
-    return true;
+state_t do_state_initial(uint32_t io_num, feedback_answers_t *answer_data){
+    off_screen();
+    return STATE_TEMP;
 }
 
-void FontDisplayTask(void* arg) {
-    // struct SSD1306_Device* Display = ( struct SSD1306_Device* ) arg;
-
-    char temperature[20];
-    char voc[20];
-    char eCO2[20];
-
-    if (SSD1306_i2c_bus_init(&Display)) {
-            SSD1306_SetFont(&Display, &Font_liberation_mono_9x15);
-
-            SSD1306_Clear(&Display, SSD_COLOR_BLACK);
-
-            SSD1306_FontDrawAnchoredString(&Display, TextAnchor_North , "COEnv", SSD_COLOR_WHITE);
-
-
-            SSD1306_SetFont(&Display, &Font_droid_sans_mono_7x13);
-            
-            sprintf(temperature, "Temp: 0   %c", 0xb0);
-            sprintf(voc,         "TVOC: 0   ppb");
-            sprintf(eCO2,        "eCO2: 400 ppm");
-
-            SSD1306_FontDrawString(&Display, 0, 14, temperature, SSD_COLOR_WHITE);
-            SSD1306_FontDrawString(&Display, strlen(temperature) * 7, 14, "C", SSD_COLOR_WHITE);
-
-            SSD1306_FontDrawString(&Display, 0, 25, voc, SSD_COLOR_WHITE);
-            
-            SSD1306_FontDrawString(&Display, 0, 36, eCO2, SSD_COLOR_WHITE);
-            
-            SSD1306_Update(&Display);
-
-            ESP_LOGI(TAG, "Display updated!");
-            vTaskDelay(pdMS_TO_TICKS(1000));
+state_t do_state_temp(uint32_t io_num, feedback_answers_t *answer_data){
+    answer_data->temp_comf=io_num;
+    temp_question_screen();
+    if(io_num == 0){
+        return STATE_TEMP_DESCR;
     }
-
-    vTaskDelete(NULL);
+    else return STATE_SOUND;
 }
 
-void update_display_data(uint32_t temperature, uint16_t tvoc, uint16_t eco2) {
-    char temperature_string[20];
-    char voc_string[20];
-    char eCO2_string[20];
+state_t do_state_temp_descr(uint32_t io_num, feedback_answers_t *answer_data){
+    answer_data->high_temp=io_num;
+    temp_descr_question_screen();
+    return STATE_SOUND;
+}
 
-    float t = temperature / 100;
+state_t do_state_sound(uint32_t io_num, feedback_answers_t *answer_data){
+    answer_data->sound_comf=io_num;
+    sound_question_screen();
+    return STATE_LIGHT;
+}
 
-    t += ((temperature % 100) * 0.01);
+state_t do_state_light(uint32_t io_num, feedback_answers_t *answer_data){
+    answer_data->light_comf=io_num;
+    light_question_screen();
+    if(io_num == 0){
+        return STATE_LIGHT_DESCR;
+    }
+    else return STATE_FINAL;
+}
 
-    SSD1306_Clear(&Display, SSD_COLOR_BLACK);
+state_t do_state_light_descr(uint32_t io_num, feedback_answers_t *answer_data){
+    answer_data->lightness=io_num;
+    light_descr_question_screen();
+    return STATE_FINAL;
+}
 
-    SSD1306_SetFont(&Display, &Font_liberation_mono_9x15);
-    SSD1306_FontDrawAnchoredString(&Display, TextAnchor_North , "COEnv", SSD_COLOR_WHITE);
+state_t do_state_final(uint32_t io_num, feedback_answers_t *answer_data){
+    off_screen();
+    return STATE_FINAL;
+}
 
 
-    SSD1306_SetFont(&Display, &Font_droid_sans_mono_7x13);
+//função genérica para chamar a tabela de estados
+state_t run_state(state_t cur_state, uint32_t io_num, feedback_answers_t *answer_data) {
+    return state_table[cur_state](io_num, answer_data);
+};
 
-    SSD1306_DrawHLine(&Display, 5, 14, 120, SSD_COLOR_WHITE);
-
-    sprintf(temperature_string, "Temp: %2.2f %c", t, 0xb0);
-    sprintf(voc_string,         "TVOC: %5d ppb", tvoc);
-    sprintf(eCO2_string,        "eCO2: %5d ppm", eco2);
-
-    SSD1306_FontDrawString(&Display, 0, 18, temperature_string, SSD_COLOR_WHITE);
-    SSD1306_FontDrawString(&Display, strlen(temperature_string) * 7, 16, "C", SSD_COLOR_WHITE);
-
-    SSD1306_FontDrawString(&Display, 0, 30, voc_string, SSD_COLOR_WHITE);
+void feedback_task(void* arg) {
+    state_t cur_state = STATE_INITIAL;
+    feedback_answers_t answer_data; 
+    uint32_t io_num = 0; //?
+    timer_event_t evt;
     
-    SSD1306_FontDrawString(&Display, 0, 42, eCO2_string, SSD_COLOR_WHITE);
+    //* Init Timers
+    tg0_timer_init(FEEDBACK_ID, FEEDBACK_INTERVAL_SEC); 
     
-    SSD1306_Update(&Display);
+    bt_config();
 
-    ESP_LOGI(TAG, "Display updated!");
+    while(1) {
+        //receive a timer interrupt
+        if(xQueueReceive(timer_queue, &evt, portMAX_DELAY)){
+            cur_state = run_state(STATE_INITIAL, io_num, &answer_data);
+            tg0_timer_init(TIMEOUT_ID, TIMEOUT_INTERVAL_SEC); 
+        }
+
+        //receive a button interrupt
+        if(xQueueReceive(gpio_evt_queue, &io_num, portMAX_DELAY)){
+            (void)timer_pause(0,TIMEOUT_ID);
+            cur_state = run_state(cur_state, io_num, &answer_data);
+            tg0_timer_init(TIMEOUT_ID, TIMEOUT_INTERVAL_SEC); 
+        }
+
+
+        // do other program logic, run other state machines, etc
+    }
 }

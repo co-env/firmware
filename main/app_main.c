@@ -60,6 +60,7 @@ void app_main(void) {
 
     xSemaphoreGive(xSemaphore);
 
+    // display_start();
     // xTaskCreate( FontDisplayTask, "FontDisplayTask", 4096, NULL, 1, NULL );
 
     xTaskCreate(mqtt_app_start, "mqtt_main_task", 1024 * 3, (void *)0, 10, NULL);
