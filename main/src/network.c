@@ -11,6 +11,8 @@
 #include "network.h"
 #include "mesh_device_app.h"
 
+#include "feedback.h"
+
 // #include "display_task.h"
 
 static const char *TAG = "NETWORK";
@@ -108,6 +110,12 @@ static esp_err_t send_data_to_cloud(esp_mqtt_client_handle_t mqtt_client, model_
                 sensor_data.violet, sensor_data.blue, sensor_data.green, sensor_data.yellow, sensor_data.orange, sensor_data.red);
     err = esp_mqtt_client_publish(mqtt_client, mqtt_topic, payload, 0, 0, 0);
 
+    /** Check to see if there's new feedback content */
+    if ((sensor_data.feedback >> 7) & 0x01) {
+        //!! Parse feedback content and send it here !!!!
+
+    }
+
     return err;
 } 
 
@@ -155,6 +163,11 @@ void gateway_device_task(void *arg) {
             ESP_LOGI(TAG, "    Yellow:      %f", _received_data.yellow);
             ESP_LOGI(TAG, "    Orange:      %f", _received_data.orange);
             ESP_LOGI(TAG, "    Red:         %f", _received_data.red);
+            ESP_LOGI(TAG, "    Feedback:    %d %d %d %d %d %d %d %d",
+                    (_received_data.feedback >> 7) & 0x01, (_received_data.feedback >> 6) & 0x01, 
+                    (_received_data.feedback >> 5) & 0x01, (_received_data.feedback >> 4) & 0x01, 
+                    (_received_data.feedback >> 3) & 0x01, (_received_data.feedback >> 2) & 0x01, 
+                    (_received_data.feedback >> 1) & 0x01, (_received_data.feedback >> 0) & 0x01 );
 
             //* Sends received data to cloud 
             send_data_to_cloud(client, _received_data);
@@ -175,11 +188,27 @@ void gateway_device_task(void *arg) {
         _own_sensor_data.blue = as7262_main_sensor.calibrated_values[AS726x_BLUE];
         _own_sensor_data.violet = as7262_main_sensor.calibrated_values[AS726x_VIOLET];
 
+        _own_sensor_data.feedback = 0x00;            // First, reset feedback data
+        
+        _own_sensor_data.feedback |= (answer_data.new_answer << 7); // Set NEW_DATA flag (MSB)
+
+        _own_sensor_data.feedback |= (answer_data.temp_comf  << 4);
+        _own_sensor_data.feedback |= (answer_data.high_temp  << 3);
+        _own_sensor_data.feedback |= (answer_data.sound_comf << 2);
+        _own_sensor_data.feedback |= (answer_data.light_comf << 1);
+        _own_sensor_data.feedback |= (answer_data.lightness  << 0);  // ( << 0) kkk aaaaaaaa
+
+        //! Debug only
+        ESP_LOGI(TAG, "Feedback data binary: %u %u %u %u %u %u %u %u",
+         (_own_sensor_data.feedback >> 7) & 0x01, (_own_sensor_data.feedback >> 6) & 0x01, 
+         (_own_sensor_data.feedback >> 5) & 0x01, (_own_sensor_data.feedback >> 4) & 0x01, 
+         (_own_sensor_data.feedback >> 3) & 0x01, (_own_sensor_data.feedback >> 2) & 0x01, 
+         (_own_sensor_data.feedback >> 1) & 0x01, (_own_sensor_data.feedback >> 0) & 0x01 );
 
         //* Sends sensor data to cloud 
         send_data_to_cloud(client, _own_sensor_data);
         
-        // update_display_data(_own_sensor_data.temperature, _own_sensor_data.tVOC, _own_sensor_data.eCO2);
+        answer_data.new_answer = false;  // It will be set to true again by the feedback state machine
         
         vTaskDelay(7000 / portTICK_RATE_MS);
     }
@@ -210,7 +239,26 @@ void node_device_task(void *arg) {
         device_data.blue = as7262_main_sensor.calibrated_values[AS726x_BLUE];
         device_data.violet = as7262_main_sensor.calibrated_values[AS726x_VIOLET];
 
+        device_data.feedback = 0x00;            // First, reset feedback data
+        
+        device_data.feedback |= (answer_data.new_answer << 7); // Set NEW_DATA flag (MSB)
+
+        device_data.feedback |= (answer_data.temp_comf  << 4);
+        device_data.feedback |= (answer_data.high_temp  << 3);
+        device_data.feedback |= (answer_data.sound_comf << 2);
+        device_data.feedback |= (answer_data.light_comf << 1);
+        device_data.feedback |= (answer_data.lightness  << 0);  // ( << 0) kkk aaaaaaaa
+
+        //! Debug only
+        ESP_LOGI(TAG, "Feedback data binary: %u %u %u %u %u %u %u %u",
+         (device_data.feedback >> 7) & 0x01, (device_data.feedback >> 6) & 0x01, 
+         (device_data.feedback >> 5) & 0x01, (device_data.feedback >> 4) & 0x01, 
+         (device_data.feedback >> 3) & 0x01, (device_data.feedback >> 2) & 0x01, 
+         (device_data.feedback >> 1) & 0x01, (device_data.feedback >> 0) & 0x01 );
+
         ble_mesh_custom_sensor_client_model_message_set(device_data);
+
+        answer_data.new_answer = false;  // It will be set to true again by the feedback state machine
         
         //TODO: Change task loop timing 
         vTaskDelay(10000 / portTICK_RATE_MS);

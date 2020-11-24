@@ -1,3 +1,14 @@
+/**
+ * @file feedback.h
+ * 
+ * @brief
+ * 
+ * @author
+ * 
+ * @date  11/2020
+ */
+
+
 #ifndef FEEDBACK_H
 #define FEEDBACK_H
 
@@ -68,8 +79,11 @@ typedef struct {
     bool high_temp; 
     bool sound_comf;
     bool light_comf;
-    bool lightness; 
-} feedback_answers_t; 
+    bool lightness;
+    bool new_answer;
+} feedback_answers_t;
+
+extern feedback_answers_t answer_data;
 
 typedef state_t state_func_t(uint32_t io_num, feedback_answers_t *answer_data);
 

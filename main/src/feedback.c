@@ -1,14 +1,23 @@
 /**
- * Copyright (c) 2017-2018 Tara Keeling
+ * @file feedback.c
  * 
- * This software is released under the MIT License.
- * https://opensource.org/licenses/MIT
+ * @brief
+ * 
+ * @author
+ * 
+ * @date  11/2020
  */
 
 #include "feedback.h"
 
+#include "esp_log.h"
+
+static const char *TAG = "FEEDBACK";
+
 /*** Timer ***/
 xQueueHandle timer_queue = NULL;
+
+feedback_answers_t answer_data = { 0 };
 
 /**
  ** Timer group0 ISR handler
@@ -141,7 +150,7 @@ state_func_t* const state_table[ NUM_STATES ] = {
 
 state_t do_state_initial(uint32_t io_num, feedback_answers_t *answer_data){
     answer_data->temp_comf=0; answer_data->high_temp=0; answer_data->sound_comf=0; answer_data->light_comf=0;  answer_data->lightness=0;
-    printf("Inital Answers:%d%d%d%d%d\n",answer_data->temp_comf,answer_data->high_temp,answer_data->sound_comf,answer_data->light_comf, answer_data->lightness);
+    ESP_LOGI(TAG, "Inital Answers:%d%d%d%d%d",answer_data->temp_comf,answer_data->high_temp,answer_data->sound_comf,answer_data->light_comf, answer_data->lightness);
     
     // temp_question_screen();
     return STATE_TEMP;
@@ -186,12 +195,13 @@ state_t do_state_light(uint32_t io_num, feedback_answers_t *answer_data){
 
 state_t do_state_light_descr(uint32_t io_num, feedback_answers_t *answer_data){
     answer_data->lightness = (io_num == BUTTON_1)? true: false;
+    answer_data->new_answer = true;  // Reached the final state, set NEW_ANSWER flag to TRUE
     off_screen();
     return STATE_FINAL;
 }
 
 state_t do_state_final(uint32_t io_num, feedback_answers_t *answer_data){
-    printf("Final Answers:%d%d%d%d%d\n",answer_data->temp_comf,answer_data->high_temp,answer_data->sound_comf,answer_data->light_comf, answer_data->lightness);
+    ESP_LOGI(TAG, "Final Answers: %d%d%d%d%d", answer_data->temp_comf,answer_data->high_temp,answer_data->sound_comf,answer_data->light_comf, answer_data->lightness);
     off_screen();
     return STATE_FINAL;
 }
@@ -199,13 +209,13 @@ state_t do_state_final(uint32_t io_num, feedback_answers_t *answer_data){
 
 //função genérica para chamar a tabela de estados
 state_t run_state(state_t cur_state, uint32_t io_num, feedback_answers_t *answer_data) {
-    printf("State: %d\n",cur_state);
+    ESP_LOGI(TAG, "Current state: %d", cur_state);
     return state_table[cur_state](io_num, answer_data);
 };
 
 void feedback_task(void* arg) {
     state_t cur_state = STATE_INITIAL;
-    feedback_answers_t answer_data; 
+    // feedback_answers_t answer_data; 
     uint32_t io_num = 0; //?
     timer_event_t evt;
     
@@ -218,7 +228,7 @@ void feedback_task(void* arg) {
     while(1) {
         //receive a timer interrupt
         if(xQueueReceive(timer_queue, &evt, 100)){
-            printf("Group[%d], timer[%d] alarm event\n", evt.timer_group, evt.timer_idx);
+            ESP_LOGI(TAG, "Group[%d], timer[%d] alarm event", evt.timer_group, evt.timer_idx);
             if(evt.timer_idx == FEEDBACK_ID){
                 cur_state = run_state(STATE_INITIAL, io_num, &answer_data);
                 tg0_timer_init(TIMEOUT_ID, TIMEOUT_INTERVAL_SEC); 
@@ -232,7 +242,7 @@ void feedback_task(void* arg) {
 
         //receive a button interrupt
         if(xQueueReceive(gpio_evt_queue, &io_num, 100)){
-            printf("GPIO[%d] intr, val: %d\n", io_num, gpio_get_level(io_num));
+            ESP_LOGI(TAG, "GPIO[%d] event received, value: %d", io_num, gpio_get_level(io_num));
             (void)timer_pause(0,TIMEOUT_ID);
             cur_state = run_state(cur_state, io_num, &answer_data);
             tg0_timer_init(TIMEOUT_ID, TIMEOUT_INTERVAL_SEC); 
