@@ -138,11 +138,7 @@ void gateway_device_task(void *arg) {
     model_sensor_data_t _own_sensor_data = {  /*!< Data from this sensor */ 
         .device_name = CONFIG_DEVICE_ID,
     };
-    
-    //* Syncronized queue where received data is put by the Server Model 
-    ble_mesh_received_data_queue = xQueueCreate(5, sizeof(model_sensor_data_t));
 
-   
     while (1) {
         /**< Checks queue to see if there's new incoming BLE Mesh data */
         if (xQueueReceive(ble_mesh_received_data_queue, &_received_data, 1000 / portTICK_RATE_MS) == pdPASS) {
@@ -162,7 +158,8 @@ void gateway_device_task(void *arg) {
 
             //* Sends received data to cloud 
             send_data_to_cloud(client, _received_data);
-            vTaskDelay(500 / portTICK_RATE_MS);
+            // update_display_data(_own_sensor_data.temperature, _own_sensor_data.tVOC, _own_sensor_data.eCO2);
+            vTaskDelay(2000 / portTICK_RATE_MS);
         }
 
         /**< Updates data from sensor readings */
