@@ -140,47 +140,58 @@ state_func_t* const state_table[ NUM_STATES ] = {
 
 
 state_t do_state_initial(uint32_t io_num, feedback_answers_t *answer_data){
-    off_screen();
+    answer_data->temp_comf=0; answer_data->high_temp=0; answer_data->sound_comf=0; answer_data->light_comf=0;  answer_data->lightness=0;
+    printf("Inital Answers:%d%d%d%d%d\n",answer_data->temp_comf,answer_data->high_temp,answer_data->sound_comf,answer_data->light_comf, answer_data->lightness);
+    
+    temp_question_screen();
     return STATE_TEMP;
 }
 
 state_t do_state_temp(uint32_t io_num, feedback_answers_t *answer_data){
     answer_data->temp_comf = (io_num == BUTTON_1)? true: false;
-    // temp_question_screen();
     if(io_num == BUTTON_0){
+        temp_descr_question_screen();
         return STATE_TEMP_DESCR;
     }
-    else return STATE_SOUND;
+    else {
+        sound_question_screen();
+        return STATE_SOUND;
+    }
 }
 
 state_t do_state_temp_descr(uint32_t io_num, feedback_answers_t *answer_data){
     answer_data->high_temp = (io_num == BUTTON_1)? true: false;
-    temp_descr_question_screen();
+    
+    sound_question_screen();
     return STATE_SOUND;
 }
 
 state_t do_state_sound(uint32_t io_num, feedback_answers_t *answer_data){
     answer_data->sound_comf = (io_num == BUTTON_1)? true: false;
-    sound_question_screen();
+    light_question_screen();
     return STATE_LIGHT;
 }
 
 state_t do_state_light(uint32_t io_num, feedback_answers_t *answer_data){
     answer_data->light_comf = (io_num == BUTTON_1)? true: false;
-    light_question_screen();
     if(io_num == BUTTON_0){
+        light_descr_question_screen();
         return STATE_LIGHT_DESCR;
     }
-    else return STATE_FINAL;
+    else {
+        off_screen();
+        return STATE_FINAL;
+    }
 }
 
 state_t do_state_light_descr(uint32_t io_num, feedback_answers_t *answer_data){
     answer_data->lightness = (io_num == BUTTON_1)? true: false;
-    light_descr_question_screen();
+    off_screen();
     return STATE_FINAL;
 }
 
 state_t do_state_final(uint32_t io_num, feedback_answers_t *answer_data){
+    printf("Final Answers:%d%d%d%d%d\n",answer_data->temp_comf,answer_data->high_temp,answer_data->sound_comf,answer_data->light_comf, answer_data->lightness);
     off_screen();
     return STATE_FINAL;
 }
@@ -202,13 +213,21 @@ void feedback_task(void* arg) {
     tg0_timer_init(FEEDBACK_ID, FEEDBACK_INTERVAL_SEC); 
     
     bt_config();
+    // off_screen();
 
     while(1) {
         //receive a timer interrupt
         if(xQueueReceive(timer_queue, &evt, 100)){
             printf("Group[%d], timer[%d] alarm event\n", evt.timer_group, evt.timer_idx);
-            cur_state = run_state(STATE_INITIAL, io_num, &answer_data);
-            tg0_timer_init(TIMEOUT_ID, TIMEOUT_INTERVAL_SEC); 
+            if(evt.timer_idx == FEEDBACK_ID){
+                cur_state = run_state(STATE_INITIAL, io_num, &answer_data);
+                tg0_timer_init(TIMEOUT_ID, TIMEOUT_INTERVAL_SEC); 
+            }
+            else if(evt.timer_idx == TIMEOUT_ID){
+                cur_state = run_state(STATE_FINAL, io_num, &answer_data);
+                (void)timer_pause(0,TIMEOUT_ID);
+                //? timer deinit
+            }
         }
 
         //receive a button interrupt

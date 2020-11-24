@@ -24,7 +24,7 @@
 #define FEEDBACK_ID           0
 #define TIMEOUT_ID            1
 #define FEEDBACK_INTERVAL_SEC   (30.0)   // sample test interval for the second timer
-#define TIMEOUT_INTERVAL_SEC   (6.0) // sample test interval for the first timer
+#define TIMEOUT_INTERVAL_SEC   (60.0) // sample test interval for the first timer
 // #define TEST_WITHOUT_RELOAD   0        // testing will be done without auto reload
 #define TEST_WITH_RELOAD      1        // testing will be done with auto reload
 
