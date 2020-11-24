@@ -43,7 +43,6 @@ void IRAM_ATTR timer_group0_isr(void *para) {
     } else if (timer_intr & TIMER_INTR_T1) {
         evt.type = TEST_WITH_RELOAD; 
         timer_group_clr_intr_status_in_isr(TIMER_GROUP_0, TIMER_1);
-
     } else {
         evt.type = -1; // not supported event type
     }
@@ -103,6 +102,7 @@ static void bt_config(void){
     io_conf.intr_type = GPIO_INTR_POSEDGE; //interrupt of rising edge //? acho que tanto faz
     io_conf.mode = GPIO_MODE_INPUT; //set as input mode    
     io_conf.pull_up_en = 0; //pins 34-39 do not have internal pull up/down  ////enable pull-up mode
+    io_conf.pull_down_en = 0;
 
     gpio_config(&io_conf);
 
@@ -145,37 +145,37 @@ state_t do_state_initial(uint32_t io_num, feedback_answers_t *answer_data){
 }
 
 state_t do_state_temp(uint32_t io_num, feedback_answers_t *answer_data){
-    answer_data->temp_comf=io_num;
+    answer_data->temp_comf = (io_num == BUTTON_1)? true: false;
     temp_question_screen();
-    if(io_num == 0){
+    if(io_num == BUTTON_0){
         return STATE_TEMP_DESCR;
     }
     else return STATE_SOUND;
 }
 
 state_t do_state_temp_descr(uint32_t io_num, feedback_answers_t *answer_data){
-    answer_data->high_temp=io_num;
+    answer_data->high_temp = (io_num == BUTTON_1)? true: false;
     temp_descr_question_screen();
     return STATE_SOUND;
 }
 
 state_t do_state_sound(uint32_t io_num, feedback_answers_t *answer_data){
-    answer_data->sound_comf=io_num;
+    answer_data->sound_comf = (io_num == BUTTON_1)? true: false;
     sound_question_screen();
     return STATE_LIGHT;
 }
 
 state_t do_state_light(uint32_t io_num, feedback_answers_t *answer_data){
-    answer_data->light_comf=io_num;
+    answer_data->light_comf = (io_num == BUTTON_1)? true: false;
     light_question_screen();
-    if(io_num == 0){
+    if(io_num == BUTTON_0){
         return STATE_LIGHT_DESCR;
     }
     else return STATE_FINAL;
 }
 
 state_t do_state_light_descr(uint32_t io_num, feedback_answers_t *answer_data){
-    answer_data->lightness=io_num;
+    answer_data->lightness = (io_num == BUTTON_1)? true: false;
     light_descr_question_screen();
     return STATE_FINAL;
 }
@@ -188,6 +188,7 @@ state_t do_state_final(uint32_t io_num, feedback_answers_t *answer_data){
 
 //função genérica para chamar a tabela de estados
 state_t run_state(state_t cur_state, uint32_t io_num, feedback_answers_t *answer_data) {
+    printf("State: %d\n",cur_state);
     return state_table[cur_state](io_num, answer_data);
 };
 
@@ -205,12 +206,14 @@ void feedback_task(void* arg) {
     while(1) {
         //receive a timer interrupt
         if(xQueueReceive(timer_queue, &evt, portMAX_DELAY)){
+            printf("Group[%d], timer[%d] alarm event\n", evt.timer_group, evt.timer_idx);
             cur_state = run_state(STATE_INITIAL, io_num, &answer_data);
             tg0_timer_init(TIMEOUT_ID, TIMEOUT_INTERVAL_SEC); 
         }
 
         //receive a button interrupt
         if(xQueueReceive(gpio_evt_queue, &io_num, portMAX_DELAY)){
+            printf("GPIO[%d] intr, val: %d\n", io_num, gpio_get_level(io_num));
             (void)timer_pause(0,TIMEOUT_ID);
             cur_state = run_state(cur_state, io_num, &answer_data);
             tg0_timer_init(TIMEOUT_ID, TIMEOUT_INTERVAL_SEC); 

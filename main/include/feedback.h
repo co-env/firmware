@@ -23,8 +23,8 @@
 #define TIMER_SCALE           (TIMER_BASE_CLK / TIMER_DIVIDER)  // convert counter value to seconds -> 5MHZ or 200ns
 #define FEEDBACK_ID           0
 #define TIMEOUT_ID            1
-#define FEEDBACK_INTERVAL_SEC   (300.0)   // sample test interval for the second timer
-#define TIMEOUT_INTERVAL_SEC   (60.0) // sample test interval for the first timer
+#define FEEDBACK_INTERVAL_SEC   (3.0)   // sample test interval for the second timer
+#define TIMEOUT_INTERVAL_SEC   (6.0) // sample test interval for the first timer
 // #define TEST_WITHOUT_RELOAD   0        // testing will be done without auto reload
 #define TEST_WITH_RELOAD      1        // testing will be done with auto reload
 
@@ -62,13 +62,13 @@ typedef enum {
     STATE_FINAL,
     NUM_STATES 
 } state_t;
+
 typedef struct {
     bool temp_comf;
     bool high_temp; 
     bool sound_comf;
     bool light_comf;
     bool lightness; 
-
 } feedback_answers_t; 
 
 typedef state_t state_func_t(uint32_t io_num, feedback_answers_t *answer_data);
