@@ -143,7 +143,7 @@ state_t do_state_initial(uint32_t io_num, feedback_answers_t *answer_data){
     answer_data->temp_comf=0; answer_data->high_temp=0; answer_data->sound_comf=0; answer_data->light_comf=0;  answer_data->lightness=0;
     printf("Inital Answers:%d%d%d%d%d\n",answer_data->temp_comf,answer_data->high_temp,answer_data->sound_comf,answer_data->light_comf, answer_data->lightness);
     
-    temp_question_screen();
+    // temp_question_screen();
     return STATE_TEMP;
 }
 

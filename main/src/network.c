@@ -11,7 +11,7 @@
 #include "network.h"
 #include "mesh_device_app.h"
 
-#include "display_task.h"
+// #include "display_task.h"
 
 static const char *TAG = "NETWORK";
 
@@ -179,7 +179,7 @@ void gateway_device_task(void *arg) {
         //* Sends sensor data to cloud 
         send_data_to_cloud(client, _own_sensor_data);
         
-        update_display_data(_own_sensor_data.temperature, _own_sensor_data.tVOC, _own_sensor_data.eCO2);
+        // update_display_data(_own_sensor_data.temperature, _own_sensor_data.tVOC, _own_sensor_data.eCO2);
         
         vTaskDelay(7000 / portTICK_RATE_MS);
     }
