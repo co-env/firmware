@@ -146,7 +146,7 @@ state_t do_state_initial(uint32_t io_num, feedback_answers_t *answer_data){
 
 state_t do_state_temp(uint32_t io_num, feedback_answers_t *answer_data){
     answer_data->temp_comf = (io_num == BUTTON_1)? true: false;
-    temp_question_screen();
+    // temp_question_screen();
     if(io_num == BUTTON_0){
         return STATE_TEMP_DESCR;
     }
@@ -205,14 +205,14 @@ void feedback_task(void* arg) {
 
     while(1) {
         //receive a timer interrupt
-        if(xQueueReceive(timer_queue, &evt, portMAX_DELAY)){
+        if(xQueueReceive(timer_queue, &evt, 100)){
             printf("Group[%d], timer[%d] alarm event\n", evt.timer_group, evt.timer_idx);
             cur_state = run_state(STATE_INITIAL, io_num, &answer_data);
             tg0_timer_init(TIMEOUT_ID, TIMEOUT_INTERVAL_SEC); 
         }
 
         //receive a button interrupt
-        if(xQueueReceive(gpio_evt_queue, &io_num, portMAX_DELAY)){
+        if(xQueueReceive(gpio_evt_queue, &io_num, 100)){
             printf("GPIO[%d] intr, val: %d\n", io_num, gpio_get_level(io_num));
             (void)timer_pause(0,TIMEOUT_ID);
             cur_state = run_state(cur_state, io_num, &answer_data);
