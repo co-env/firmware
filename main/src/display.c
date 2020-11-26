@@ -18,7 +18,8 @@ const struct SSD1306_FontDef* FontList[ ] = {
     &Font_droid_sans_mono_13x24,
     &Font_droid_sans_mono_16x31,
     &Font_liberation_mono_9x15,
-    &Font_liberation_mono_13x21,    &Font_liberation_mono_17x30,
+    &Font_liberation_mono_13x21,    
+    &Font_liberation_mono_17x30,
     NULL
 };
 
@@ -59,17 +60,17 @@ void display_start(void) { //!
 void temp_question_screen(void) {
 
     SSD1306_Clear(&Display, SSD_COLOR_BLACK);
-    SSD1306_SetFont(&Display, &Font_liberation_mono_9x15);
-    SSD1306_FontDrawAnchoredString(&Display, TextAnchor_North , "COEnv", SSD_COLOR_WHITE);
-    SSD1306_DrawHLine(&Display,5,14,120,SSD_COLOR_WHITE);
+    // SSD1306_SetFont(&Display, &Font_liberation_mono_9x15);
+    // SSD1306_FontDrawAnchoredString(&Display, TextAnchor_North , "COEnv", SSD_COLOR_WHITE);
+    // SSD1306_DrawHLine(&Display,5,14,120,SSD_COLOR_WHITE);
 
-    SSD1306_SetFont(&Display, &Font_droid_sans_mono_7x13);
+    // SSD1306_SetFont(&Display, &Font_droid_sans_mono_7x13);
     
-    SSD1306_FontDrawString(&Display, 0, 25, "Est\xE1 confort\xE1vel", SSD_COLOR_WHITE);
-    SSD1306_FontDrawString(&Display, 0, 25, "com a temperatura?", SSD_COLOR_WHITE);
+    // SSD1306_FontDrawString(&Display, 0, 25, "Est\xE1 confort\xE1vel", SSD_COLOR_WHITE);
+    // SSD1306_FontDrawString(&Display, 0, 25, "com a temperatura?", SSD_COLOR_WHITE);
 
-    SSD1306_DrawBox(&Display,TextAnchor_SouthWest, "Sim", SSD_COLOR_BLACK);
-    SSD1306_DrawBox(&Display,TextAnchor_SouthEast, "N\xE3o", SSD_COLOR_WHITE);
+    // SSD1306_DrawBox(&Display,TextAnchor_SouthWest, "Sim", SSD_COLOR_BLACK);
+    // SSD1306_DrawBox(&Display,TextAnchor_SouthEast, "N\xE3o", SSD_COLOR_WHITE);
 }
 
 void temp_descr_question_screen(void){}
@@ -78,7 +79,7 @@ void light_question_screen(void){}
 void light_descr_question_screen(void){}
 
 void off_screen(void){
-    SSD1306_Clear(&Display, SSD_COLOR_BLACK);
+    // SSD1306_Clear(&Display, SSD_COLOR_BLACK);
 }
 
 void update_display_data(uint32_t temperature, uint16_t tvoc, uint16_t eco2) {

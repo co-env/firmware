@@ -52,38 +52,38 @@ void app_main(void) {
     timer_queue = xQueueCreate(10, sizeof(timer_event_t));
     gpio_evt_queue = xQueueCreate(10, sizeof(uint32_t)); 
 
-    esp_err_t err = nvs_flash_init();
-    if (err == ESP_ERR_NVS_NO_FREE_PAGES) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        err = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(err);
+    // esp_err_t err = nvs_flash_init();
+    // if (err == ESP_ERR_NVS_NO_FREE_PAGES) {
+    //     ESP_ERROR_CHECK(nvs_flash_erase());
+    //     err = nvs_flash_init();
+    // }
+    // ESP_ERROR_CHECK(err);
 
-    ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
-    ESP_ERROR_CHECK(i2c_master_driver_initialize());
+    // ESP_ERROR_CHECK(esp_netif_init());
+    // ESP_ERROR_CHECK(esp_event_loop_create_default());
+    // ESP_ERROR_CHECK(i2c_master_driver_initialize());
     
-    /* This helper function configures Wi-Fi or Ethernet, as selected in menuconfig.
-     * Read "Establishing Wi-Fi or Ethernet Connection" section in
-     * examples/protocols/README.md for more information about this function.
-     */
-    #if CONFIG_COENV_NODE_TYPE_GATEWAY
-    ESP_ERROR_CHECK(example_connect());
-    #endif
+    // /* This helper function configures Wi-Fi or Ethernet, as selected in menuconfig.
+    //  * Read "Establishing Wi-Fi or Ethernet Connection" section in
+    //  * examples/protocols/README.md for more information about this function.
+    //  */
+    // #if CONFIG_COENV_NODE_TYPE_GATEWAY
+    // ESP_ERROR_CHECK(example_connect());
+    // #endif
 
-    err = ble_mesh_device_init();
-    if (err) {
-        ESP_LOGE(TAG, "Bluetooth mesh init failed (err 0x%06x)", err);
-    }
+    // err = ble_mesh_device_init();
+    // if (err) {
+    //     ESP_LOGE(TAG, "Bluetooth mesh init failed (err 0x%06x)", err);
+    // }
 
-    xSemaphore = xSemaphoreCreateMutex();
-    xSemaphoreGive(xSemaphore);
+    // xSemaphore = xSemaphoreCreateMutex();
+    // xSemaphoreGive(xSemaphore);
 
-    #if CONFIG_COENV_NODE_TYPE_GATEWAY
-    xTaskCreate(gateway_device_task, "gateway_main_task", 1024 * 4, (void *)0, 30, NULL);
-    #elif CONFIG_COENV_NODE_TYPE_SENSOR
-    xTaskCreate(node_device_task, "node_main_task", 1024 * 3, (void *)0, 30, NULL);
-    #endif
+    // #if CONFIG_COENV_NODE_TYPE_GATEWAY
+    // xTaskCreate(gateway_device_task, "gateway_main_task", 1024 * 4, (void *)0, 30, NULL);
+    // #elif CONFIG_COENV_NODE_TYPE_SENSOR
+    // xTaskCreate(node_device_task, "node_main_task", 1024 * 3, (void *)0, 30, NULL);
+    // #endif
     
     // xTaskCreate(FontDisplayTask, "FontDisplayTask", 1024 * 5, NULL, 5, NULL);
     
