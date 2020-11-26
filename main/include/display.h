@@ -14,9 +14,12 @@
 #include "freertos/task.h"
 #include "freertos/queue.h"
 
+bool SSD1306_i2c_bus_init(void); //initialized in feedback task
+
 void temp_question_screen(void);
 void temp_descr_question_screen(void);
 void sound_question_screen(void);
+
 void light_question_screen(void);
 void light_descr_question_screen(void);
 void off_screen(void);
