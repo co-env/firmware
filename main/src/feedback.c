@@ -138,16 +138,16 @@ void feedback_task(void* arg) {
     timer_event_t evt;
     
     //* Init Timers
-    tg0_timer_init(FEEDBACK_ID, FEEDBACK_INTERVAL_SEC); 
+    tg0_timer_init(SENSOR_ID, SENSOR_INTERVAL_SEC); 
     // SSD1306_i2c_bus_init();
     bt_config();
     // off_screen();
 
     while(1) {
         //receive a timer interrupt
-        if(xQueueReceive(timer_queue, &evt, 100)){
+        if(xQueueReceive(feedback_timer_queue, &evt, 100)){
             ESP_LOGI(TAG, "Group[%d], timer[%d] alarm event", evt.timer_group, evt.timer_idx);
-            if(evt.timer_idx == FEEDBACK_ID){
+            if(evt.timer_idx == SENSOR_ID){
                 cur_state = run_state(STATE_INITIAL, io_num, &answer_data);
                 tg0_timer_init(TIMEOUT_ID, TIMEOUT_INTERVAL_SEC); 
             }

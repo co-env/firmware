@@ -1,6 +1,7 @@
 #include "timer.h"
 
-xQueueHandle timer_queue = NULL;
+xQueueHandle sensor_timer_queue = NULL;
+xQueueHandle feedback_timer_queue = NULL;
 
 
 /**
@@ -17,6 +18,7 @@ void IRAM_ATTR timer_group0_isr(void *para) {
     timer_spinlock_take(TIMER_GROUP_0);
     
     int timer_idx = (int) para;
+    static uint8_t feedback_counter = 0;
 
     /* Retrieve the interrupt status(?) and the counter value
        from the timer that reported the interrupt */
@@ -30,14 +32,17 @@ void IRAM_ATTR timer_group0_isr(void *para) {
 
     /* Clear the interrupt
        and update the alarm time for the timer with without reload */
-    if (timer_intr & TIMER_INTR_T0) {
-        evt.type = TEST_WITH_RELOAD; 
+    if (timer_intr & TIMER_INTR_T0) { //SENSOR
         timer_group_clr_intr_status_in_isr(TIMER_GROUP_0, TIMER_0);
-    } else if (timer_intr & TIMER_INTR_T1) {
-        evt.type = TEST_WITH_RELOAD; 
+        
+        if(++feedback_counter == MAX_FEEDBACK_COUNT){
+            evt.feedback_flag = true;
+            feedback_counter = 0;
+        } else {
+            evt.feedback_flag = false;
+        }
+    } else if (timer_intr & TIMER_INTR_T1) { //TIMEOUT
         timer_group_clr_intr_status_in_isr(TIMER_GROUP_0, TIMER_1);
-    } else {
-        evt.type = -1; // not supported event type
     }
 
     /* After the alarm has been triggered
@@ -45,7 +50,14 @@ void IRAM_ATTR timer_group0_isr(void *para) {
     timer_group_enable_alarm_in_isr(TIMER_GROUP_0, timer_idx);
 
     /* Now just send the event data back to the main program task */
-    xQueueSendFromISR(timer_queue, &evt, NULL);
+    if(timer_idx == SENSOR_ID){
+        xQueueSendFromISR(sensor_timer_queue, &evt, NULL);
+        if(evt.feedback_flag){
+            xQueueSendFromISR(feedback_timer_queue, &evt, NULL);
+        }
+    } else {
+        xQueueSendFromISR(feedback_timer_queue, &evt, NULL);
+    }
 
     timer_spinlock_give(TIMER_GROUP_0);
 }

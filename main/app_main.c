@@ -49,7 +49,8 @@ void app_main(void) {
     esp_log_level_set("TRANSPORT", ESP_LOG_VERBOSE);
     esp_log_level_set("OUTBOX", ESP_LOG_VERBOSE);
 
-    timer_queue = xQueueCreate(10, sizeof(timer_event_t));
+    sensor_timer_queue = xQueueCreate(10, sizeof(timer_event_t));
+    feedback_timer_queue = xQueueCreate(10, sizeof(timer_event_t));
     gpio_evt_queue = xQueueCreate(10, sizeof(uint32_t)); 
 
     // esp_err_t err = nvs_flash_init();
