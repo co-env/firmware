@@ -5,8 +5,6 @@
 #include "driver/i2c.h"
 #include "sdkconfig.h"
 
-#include "freertos/event_groups.h"
-
 #include "timer.h"
 #include "SGP30.h"
 #include "AS7262.h"
@@ -30,11 +28,6 @@
 #define I2C_MASTER_TX_BUF_DISABLE 0                           /*!< I2C master doesn't need buffer */
 #define I2C_MASTER_RX_BUF_DISABLE 0                           /*!< I2C master doesn't need buffer */
 
-#define EVT_GRP_COLOR_SENSOR_COMPLETE   (1<<0)
-#define EVT_GRP_AIR_SENSOR_COMPLETE     (1<<1)
-#define EVT_GRP_TEMP_SENSOR_COMPLETE    (1<<2)
-#define EVT_GRP_SOUND_SENSOR_COMPLETE   (1<<3)
-#define EVT_GRP_BITS         (EVT_GRP_COLOR_SENSOR_COMPLETE | EVT_GRP_AIR_SENSOR_COMPLETE | EVT_GRP_TEMP_SENSOR_COMPLETE | EVT_GRP_SOUND_SENSOR_COMPLETE)
 
 as7262_dev_t as7262_main_sensor;
 sgp30_dev_t sgp30_main_sensor;
@@ -43,7 +36,6 @@ struct bme280_data comp_data;
 
 extern SemaphoreHandle_t xSemaphore;
 
-extern EventGroupHandle_t sensorsEventGroup;
 
 /** I2C **/ 
 esp_err_t i2c_master_driver_initialize(void);

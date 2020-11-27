@@ -12,6 +12,7 @@
 #include "mesh_device_app.h"
 
 #include "feedback.h"
+#include "rtos_sync.h"
 
 // #include "display_task.h"
 
@@ -176,41 +177,44 @@ void gateway_device_task(void *arg) {
         }
 
         /**< Updates data from sensor readings */
-        _own_sensor_data.eCO2 = sgp30_main_sensor.eCO2;
-        _own_sensor_data.tVOC = sgp30_main_sensor.TVOC;
-        _own_sensor_data.temperature = comp_data.temperature;
-        _own_sensor_data.humidity = comp_data.humidity;
+        if(xEventGroupWaitBits(sensorsEventGroup,EVT_GRP_BITS, 1, 1, portMAX_DELAY)){
+            if(xEventGroupGetBits(sensorsEventGroup) & EVT_GRP_FEEDBACK_TIME){
+                xEventGroupWaitBits(sensorsEventGroup,EVT_GRP_FEEDBACK_COMPLETE, 1, 0, portMAX_DELAY);
+            }
+            _own_sensor_data.eCO2 = sgp30_main_sensor.eCO2;
+            _own_sensor_data.tVOC = sgp30_main_sensor.TVOC;
+            _own_sensor_data.temperature = comp_data.temperature;
+            _own_sensor_data.humidity = comp_data.humidity;
 
-        _own_sensor_data.red = as7262_main_sensor.calibrated_values[AS726x_RED];
-        _own_sensor_data.orange = as7262_main_sensor.calibrated_values[AS726x_ORANGE];
-        _own_sensor_data.yellow = as7262_main_sensor.calibrated_values[AS726x_YELLOW];
-        _own_sensor_data.green = as7262_main_sensor.calibrated_values[AS726x_GREEN];
-        _own_sensor_data.blue = as7262_main_sensor.calibrated_values[AS726x_BLUE];
-        _own_sensor_data.violet = as7262_main_sensor.calibrated_values[AS726x_VIOLET];
+            _own_sensor_data.red = as7262_main_sensor.calibrated_values[AS726x_RED];
+            _own_sensor_data.orange = as7262_main_sensor.calibrated_values[AS726x_ORANGE];
+            _own_sensor_data.yellow = as7262_main_sensor.calibrated_values[AS726x_YELLOW];
+            _own_sensor_data.green = as7262_main_sensor.calibrated_values[AS726x_GREEN];
+            _own_sensor_data.blue = as7262_main_sensor.calibrated_values[AS726x_BLUE];
+            _own_sensor_data.violet = as7262_main_sensor.calibrated_values[AS726x_VIOLET];
 
-        _own_sensor_data.feedback = 0x00;            // First, reset feedback data
-        
-        _own_sensor_data.feedback |= (answer_data.new_answer << 7); // Set NEW_DATA flag (MSB)
+            _own_sensor_data.feedback = 0x00;            // First, reset feedback data
+            
+            _own_sensor_data.feedback |= (answer_data.new_answer << 7); // Set NEW_DATA flag (MSB)
 
-        _own_sensor_data.feedback |= (answer_data.temp_comf  << 4);
-        _own_sensor_data.feedback |= (answer_data.high_temp  << 3);
-        _own_sensor_data.feedback |= (answer_data.sound_comf << 2);
-        _own_sensor_data.feedback |= (answer_data.light_comf << 1);
-        _own_sensor_data.feedback |= (answer_data.lightness  << 0);  // ( << 0) kkk aaaaaaaa
+            _own_sensor_data.feedback |= (answer_data.temp_comf  << 4);
+            _own_sensor_data.feedback |= (answer_data.high_temp  << 3);
+            _own_sensor_data.feedback |= (answer_data.sound_comf << 2);
+            _own_sensor_data.feedback |= (answer_data.light_comf << 1);
+            _own_sensor_data.feedback |= (answer_data.lightness  << 0);  // ( << 0) kkk aaaaaaaa
 
-        //! Debug only
-        ESP_LOGI(TAG, "Feedback data binary: %u %u %u %u %u %u %u %u",
-         (_own_sensor_data.feedback >> 7) & 0x01, (_own_sensor_data.feedback >> 6) & 0x01, 
-         (_own_sensor_data.feedback >> 5) & 0x01, (_own_sensor_data.feedback >> 4) & 0x01, 
-         (_own_sensor_data.feedback >> 3) & 0x01, (_own_sensor_data.feedback >> 2) & 0x01, 
-         (_own_sensor_data.feedback >> 1) & 0x01, (_own_sensor_data.feedback >> 0) & 0x01 );
+            //! Debug only
+            ESP_LOGI(TAG, "Feedback data binary: %u %u %u %u %u %u %u %u",
+            (_own_sensor_data.feedback >> 7) & 0x01, (_own_sensor_data.feedback >> 6) & 0x01, 
+            (_own_sensor_data.feedback >> 5) & 0x01, (_own_sensor_data.feedback >> 4) & 0x01, 
+            (_own_sensor_data.feedback >> 3) & 0x01, (_own_sensor_data.feedback >> 2) & 0x01, 
+            (_own_sensor_data.feedback >> 1) & 0x01, (_own_sensor_data.feedback >> 0) & 0x01 );
 
-        //* Sends sensor data to cloud 
-        send_data_to_cloud(client, _own_sensor_data);
-        
-        answer_data.new_answer = false;  // It will be set to true again by the feedback state machine
-        
-        vTaskDelay(7000 / portTICK_RATE_MS);
+            //* Sends sensor data to cloud 
+            send_data_to_cloud(client, _own_sensor_data);
+            
+            answer_data.new_answer = false;  // It will be set to true again by the feedback state machine
+        }
     }
 }
 
@@ -223,45 +227,68 @@ void node_device_task(void *arg) {
     };
 
     while (1) {
-        device_data.eCO2 = sgp30_main_sensor.eCO2;
-        device_data.tVOC = sgp30_main_sensor.TVOC;
 
-        device_data.temperature = comp_data.temperature;
-        device_data.humidity = comp_data.humidity;
-        device_data.pressure = comp_data.pressure;
+        if(xEventGroupWaitBits(sensorsEventGroup,EVT_GRP_BITS, 1, 1, portMAX_DELAY)){
+            if(xEventGroupGetBits(sensorsEventGroup) & EVT_GRP_FEEDBACK_TIME){
+                xEventGroupWaitBits(sensorsEventGroup,EVT_GRP_FEEDBACK_COMPLETE, 1, 0, portMAX_DELAY);
+            }
+            device_data.eCO2 = sgp30_main_sensor.eCO2;
+            device_data.tVOC = sgp30_main_sensor.TVOC;
 
-        device_data.noise_level = 40;
+            device_data.temperature = comp_data.temperature;
+            device_data.humidity = comp_data.humidity;
+            device_data.pressure = comp_data.pressure;
 
-        device_data.red = as7262_main_sensor.calibrated_values[AS726x_RED];
-        device_data.orange = as7262_main_sensor.calibrated_values[AS726x_ORANGE];
-        device_data.yellow = as7262_main_sensor.calibrated_values[AS726x_YELLOW];
-        device_data.green = as7262_main_sensor.calibrated_values[AS726x_GREEN];
-        device_data.blue = as7262_main_sensor.calibrated_values[AS726x_BLUE];
-        device_data.violet = as7262_main_sensor.calibrated_values[AS726x_VIOLET];
+            device_data.noise_level = 40;
 
-        device_data.feedback = 0x00;            // First, reset feedback data
+            device_data.red = as7262_main_sensor.calibrated_values[AS726x_RED];
+            device_data.orange = as7262_main_sensor.calibrated_values[AS726x_ORANGE];
+            device_data.yellow = as7262_main_sensor.calibrated_values[AS726x_YELLOW];
+            device_data.green = as7262_main_sensor.calibrated_values[AS726x_GREEN];
+            device_data.blue = as7262_main_sensor.calibrated_values[AS726x_BLUE];
+            device_data.violet = as7262_main_sensor.calibrated_values[AS726x_VIOLET];
+
+            device_data.feedback = 0x00;            // First, reset feedback data
+            
+            device_data.feedback |= (answer_data.new_answer << 7); // Set NEW_DATA flag (MSB)
+
+            device_data.feedback |= (answer_data.temp_comf  << 4);
+            device_data.feedback |= (answer_data.high_temp  << 3);
+            device_data.feedback |= (answer_data.sound_comf << 2);
+            device_data.feedback |= (answer_data.light_comf << 1);
+            device_data.feedback |= (answer_data.lightness  << 0);  // ( << 0) kkk aaaaaaaa
+
+            //! Debug only
+            ESP_LOGI(TAG, "Feedback data binary: %u %u %u %u %u %u %u %u",
+            (device_data.feedback >> 7) & 0x01, (device_data.feedback >> 6) & 0x01, 
+            (device_data.feedback >> 5) & 0x01, (device_data.feedback >> 4) & 0x01, 
+            (device_data.feedback >> 3) & 0x01, (device_data.feedback >> 2) & 0x01, 
+            (device_data.feedback >> 1) & 0x01, (device_data.feedback >> 0) & 0x01 );
+
+            ESP_LOGW(TAG, "Dados dos sensores %s", device_data.device_name);
+            ESP_LOGW(TAG, "    Temperatura: %f", device_data.temperature);
+            ESP_LOGW(TAG, "    Pressao:     %f", device_data.pressure);
+            ESP_LOGW(TAG, "    Umidade:     %f", device_data.humidity);
+            ESP_LOGW(TAG, "    TVOC:        %d", device_data.tVOC);
+            ESP_LOGW(TAG, "    eCO2:        %d", device_data.eCO2);
+            ESP_LOGW(TAG, "    Ruido:       %d", device_data.noise_level);
+            ESP_LOGW(TAG, "    Violet:      %f", device_data.violet);
+            ESP_LOGW(TAG, "    Blue:        %f", device_data.blue);
+            ESP_LOGW(TAG, "    Green:       %f", device_data.green);
+            ESP_LOGW(TAG, "    Yellow:      %f", device_data.yellow);
+            ESP_LOGW(TAG, "    Orange:      %f", device_data.orange);
+            ESP_LOGW(TAG, "    Red:         %f", device_data.red);
+            ESP_LOGW(TAG, "    Feedback:    %d %d %d %d %d %d %d %d",
+                    (device_data.feedback >> 7) & 0x01, (device_data.feedback >> 6) & 0x01, 
+                    (device_data.feedback >> 5) & 0x01, (device_data.feedback >> 4) & 0x01, 
+                    (device_data.feedback >> 3) & 0x01, (device_data.feedback >> 2) & 0x01, 
+                    (device_data.feedback >> 1) & 0x01, (device_data.feedback >> 0) & 0x01 );
+
+            ble_mesh_custom_sensor_client_model_message_set(device_data);
+            
+            answer_data.new_answer = false;  // It will be set to true again by the feedback state machine
+        }
         
-        device_data.feedback |= (answer_data.new_answer << 7); // Set NEW_DATA flag (MSB)
-
-        device_data.feedback |= (answer_data.temp_comf  << 4);
-        device_data.feedback |= (answer_data.high_temp  << 3);
-        device_data.feedback |= (answer_data.sound_comf << 2);
-        device_data.feedback |= (answer_data.light_comf << 1);
-        device_data.feedback |= (answer_data.lightness  << 0);  // ( << 0) kkk aaaaaaaa
-
-        //! Debug only
-        ESP_LOGI(TAG, "Feedback data binary: %u %u %u %u %u %u %u %u",
-         (device_data.feedback >> 7) & 0x01, (device_data.feedback >> 6) & 0x01, 
-         (device_data.feedback >> 5) & 0x01, (device_data.feedback >> 4) & 0x01, 
-         (device_data.feedback >> 3) & 0x01, (device_data.feedback >> 2) & 0x01, 
-         (device_data.feedback >> 1) & 0x01, (device_data.feedback >> 0) & 0x01 );
-
-        ble_mesh_custom_sensor_client_model_message_set(device_data);
-
-        answer_data.new_answer = false;  // It will be set to true again by the feedback state machine
-        
-        //TODO: Change task loop timing 
-        vTaskDelay(10000 / portTICK_RATE_MS);
     }
 
 }

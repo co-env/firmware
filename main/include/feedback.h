@@ -31,9 +31,9 @@
 
 
 /*** Push buttons ***/ 
-#define BUTTON_0     35
-#define BUTTON_1     32
-#define BUTTON_2     33
+#define BUTTON_0     35 //Não
+#define BUTTON_1     32 
+#define BUTTON_2     33 //Sim
 #define GPIO_INPUT_PIN_SEL  ((1ULL<<BUTTON_0) | (1ULL<<BUTTON_1) | (1ULL<<BUTTON_2))
 #define ESP_INTR_FLAG_DEFAULT 0 //??
 

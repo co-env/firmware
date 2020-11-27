@@ -23,6 +23,10 @@ void sound_question_screen(void);
 void light_question_screen(void);
 void light_descr_question_screen(void);
 void off_screen(void);
+void on_screen(void);
+void thankyou_screen(void);
+
+void splash_screen(uint8_t i);
 
 void display_start(void);
 void update_display_data(uint32_t temperature, uint16_t tvoc, uint16_t eco2);

@@ -1,11 +1,12 @@
 #include "sensors.h"
+#include "rtos_sync.h"
 
 static const char *TAG = "SENSORS";
 
 adc_channel_t mic_channel = ADC_CHANNEL_6;
 
 SemaphoreHandle_t xSemaphore = NULL;
-EventGroupHandle_t sensorsEventGroup = NULL;
+// EventGroupHandle_t sensorsEventGroup = NULL;
 
 /******** I2C ********/
 i2c_port_t i2c_num = I2C_MASTER_NUM;

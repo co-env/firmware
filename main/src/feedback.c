@@ -9,6 +9,7 @@
  */
 
 #include "feedback.h"
+#include "rtos_sync.h"
 
 static const char *TAG = "FEEDBACK";
 
@@ -69,13 +70,14 @@ state_func_t* const state_table[ NUM_STATES ] = {
 state_t do_state_initial(uint32_t io_num, feedback_answers_t *answer_data){
     answer_data->temp_comf=0; answer_data->high_temp=0; answer_data->sound_comf=0; answer_data->light_comf=0;  answer_data->lightness=0;
     ESP_LOGI(TAG, "Inital Answers:%d%d%d%d%d",answer_data->temp_comf,answer_data->high_temp,answer_data->sound_comf,answer_data->light_comf, answer_data->lightness);
-    
+    on_screen();
+    temp_question_screen();
     // temp_question_screen();
     return STATE_TEMP;
 }
 
 state_t do_state_temp(uint32_t io_num, feedback_answers_t *answer_data){
-    answer_data->temp_comf = (io_num == BUTTON_1)? true: false;
+    answer_data->temp_comf = (io_num == BUTTON_2)? true: false;
     if(io_num == BUTTON_0){
         temp_descr_question_screen();
         return STATE_TEMP_DESCR;
@@ -87,39 +89,45 @@ state_t do_state_temp(uint32_t io_num, feedback_answers_t *answer_data){
 }
 
 state_t do_state_temp_descr(uint32_t io_num, feedback_answers_t *answer_data){
-    answer_data->high_temp = (io_num == BUTTON_1)? true: false;
+    answer_data->high_temp = (io_num == BUTTON_2)? true: false;
     
     sound_question_screen();
     return STATE_SOUND;
 }
 
 state_t do_state_sound(uint32_t io_num, feedback_answers_t *answer_data){
-    answer_data->sound_comf = (io_num == BUTTON_1)? true: false;
+    answer_data->sound_comf = (io_num == BUTTON_2)? true: false;
     light_question_screen();
     return STATE_LIGHT;
 }
 
 state_t do_state_light(uint32_t io_num, feedback_answers_t *answer_data){
-    answer_data->light_comf = (io_num == BUTTON_1)? true: false;
+    answer_data->light_comf = (io_num == BUTTON_2)? true: false;
     if(io_num == BUTTON_0){
         light_descr_question_screen();
         return STATE_LIGHT_DESCR;
     }
     else {
-        off_screen();
+        answer_data->new_answer = true;  // Reached the final state, set NEW_ANSWER flag to TRUE
+        xEventGroupSetBits(sensorsEventGroup, EVT_GRP_FEEDBACK_COMPLETE);
+        thankyou_screen();
+        // off_screen();
         return STATE_FINAL;
     }
 }
 
 state_t do_state_light_descr(uint32_t io_num, feedback_answers_t *answer_data){
-    answer_data->lightness = (io_num == BUTTON_1)? true: false;
+    answer_data->lightness = (io_num == BUTTON_2)? true : false;
     answer_data->new_answer = true;  // Reached the final state, set NEW_ANSWER flag to TRUE
-    off_screen();
+    xEventGroupSetBits(sensorsEventGroup, EVT_GRP_FEEDBACK_COMPLETE);
+    thankyou_screen();
+    // off_screen();
     return STATE_FINAL;
 }
 
 state_t do_state_final(uint32_t io_num, feedback_answers_t *answer_data){
     ESP_LOGI(TAG, "Final Answers: %d%d%d%d%d", answer_data->temp_comf,answer_data->high_temp,answer_data->sound_comf,answer_data->light_comf, answer_data->lightness);
+    xEventGroupSetBits(sensorsEventGroup, EVT_GRP_FEEDBACK_COMPLETE);
     off_screen();
     return STATE_FINAL;
 }
@@ -147,6 +155,7 @@ void feedback_task(void* arg) {
         if(xQueueReceive(feedback_timer_queue, &evt, 100)){
             ESP_LOGI(TAG, "Group[%d], timer[%d] alarm event", evt.timer_group, evt.timer_idx);
             if(evt.timer_idx == SENSOR_ID){
+                xEventGroupSetBits(sensorsEventGroup, EVT_GRP_FEEDBACK_TIME);
                 cur_state = run_state(STATE_INITIAL, io_num, &answer_data);
                 tg0_timer_init(TIMEOUT_ID, TIMEOUT_INTERVAL_SEC); 
             }
