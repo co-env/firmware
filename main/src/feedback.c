@@ -66,19 +66,32 @@ state_func_t* const state_table[ NUM_STATES ] = {
     do_state_sound, do_state_light, do_state_light_descr, do_state_final
 };
 
+/** Execução dos Estados **/
 
+/**
+ * @brief Estado Inicial
+ * Zera as respostas. Liga o display, faz a primeira pergunta (Temperatura)
+ * @return novo estado = STATE_TEMP (salva resposta de conforto de temperatura)
+ */
 state_t do_state_initial(uint32_t io_num, feedback_answers_t *answer_data){
-    answer_data->temp_comf=0; answer_data->high_temp=0; answer_data->sound_comf=0; answer_data->light_comf=0;  answer_data->lightness=0;
+    answer_data->temp_comf=0; answer_data->high_temp=0; answer_data->sound_comf=0; answer_data->light_comf=0;  answer_data->lightness=0; answer_data->new_answer=false;
     ESP_LOGI(TAG, "Inital Answers:%d%d%d%d%d",answer_data->temp_comf,answer_data->high_temp,answer_data->sound_comf,answer_data->light_comf, answer_data->lightness);
     on_screen();
+    tg0_timer_init(TIMEOUT_ID, TIMEOUT_INTERVAL_SEC); 
     temp_question_screen();
-    // temp_question_screen();
     return STATE_TEMP;
 }
 
+/**
+ * @brief Estado Temperatura. 
+ * Salva a resposta sobre o conforto térmico
+ * Em caso de desconforto (Button 0), pergunta detalhes. 
+ * Se estiver confortável (Button 2), pergunta sobre conforto acústico.
+ */
 state_t do_state_temp(uint32_t io_num, feedback_answers_t *answer_data){
     answer_data->temp_comf = (io_num == BUTTON_2)? true: false;
-    if(io_num == BUTTON_0){
+    tg0_timer_init(TIMEOUT_ID, TIMEOUT_INTERVAL_SEC); 
+    if(io_num == BUTTON_0){ 
         temp_descr_question_screen();
         return STATE_TEMP_DESCR;
     }
@@ -88,21 +101,40 @@ state_t do_state_temp(uint32_t io_num, feedback_answers_t *answer_data){
     }
 }
 
+/**
+ * @brief Estado Descrição da Temperatura
+ * Salva a informação sobre a temperatura. Mostra a pergunta sobre conforto acústico
+ * @return STATE_SOUND 
+ */
 state_t do_state_temp_descr(uint32_t io_num, feedback_answers_t *answer_data){
     answer_data->high_temp = (io_num == BUTTON_2)? true: false;
-    
+    tg0_timer_init(TIMEOUT_ID, TIMEOUT_INTERVAL_SEC); 
     sound_question_screen();
+    
     return STATE_SOUND;
 }
 
+/**
+ * @brief Estado Som
+ * Salva as informações sobre conforto acústico.
+ * Mostra a tela com pergunta sobre conforto luminoso
+ */
 state_t do_state_sound(uint32_t io_num, feedback_answers_t *answer_data){
     answer_data->sound_comf = (io_num == BUTTON_2)? true: false;
+    tg0_timer_init(TIMEOUT_ID, TIMEOUT_INTERVAL_SEC); 
     light_question_screen();
     return STATE_LIGHT;
 }
 
+/**
+ * @brief Estado Luz
+ * Salva as informações sobre conforto luminoso.
+ * Em caso de desconforto (Button 0), pergunta detalhes. 
+ * Se estiver confortável (Button 2), mostra a tela de agradecimento e encerra o feedback.
+ */
 state_t do_state_light(uint32_t io_num, feedback_answers_t *answer_data){
     answer_data->light_comf = (io_num == BUTTON_2)? true: false;
+    tg0_timer_init(TIMEOUT_ID, TIMEOUT_INTERVAL_SEC); 
     if(io_num == BUTTON_0){
         light_descr_question_screen();
         return STATE_LIGHT_DESCR;
@@ -110,24 +142,40 @@ state_t do_state_light(uint32_t io_num, feedback_answers_t *answer_data){
     else {
         answer_data->new_answer = true;  // Reached the final state, set NEW_ANSWER flag to TRUE
         xEventGroupSetBits(sensorsEventGroup, EVT_GRP_FEEDBACK_COMPLETE);
+        (void)timer_pause(0,TIMEOUT_ID);
         thankyou_screen();
-        // off_screen();
+        vTaskDelay(1000 / portTICK_RATE_MS);
+        off_screen();
         return STATE_FINAL;
     }
 }
 
+/**
+ * @brief Estado Descrição Luz
+ * Salva as informações sobre conforto luminoso.
+ * Mostra a tela de agradecimento e encerra o feedback.
+ */
 state_t do_state_light_descr(uint32_t io_num, feedback_answers_t *answer_data){
     answer_data->lightness = (io_num == BUTTON_2)? true : false;
     answer_data->new_answer = true;  // Reached the final state, set NEW_ANSWER flag to TRUE
+    
+    (void)timer_pause(0,TIMEOUT_ID);
     xEventGroupSetBits(sensorsEventGroup, EVT_GRP_FEEDBACK_COMPLETE);
+    
     thankyou_screen();
-    // off_screen();
+    vTaskDelay(1000 / portTICK_RATE_MS);
+    off_screen();
+
     return STATE_FINAL;
 }
 
+/**
+ * @brief Estado Final
+ * Caso o botão seja apertado após o fim da coleta de feedback, ou o tempo limite para responder seja atingido. 
+ */
 state_t do_state_final(uint32_t io_num, feedback_answers_t *answer_data){
     ESP_LOGI(TAG, "Final Answers: %d%d%d%d%d", answer_data->temp_comf,answer_data->high_temp,answer_data->sound_comf,answer_data->light_comf, answer_data->lightness);
-    xEventGroupSetBits(sensorsEventGroup, EVT_GRP_FEEDBACK_COMPLETE);
+    (void)timer_pause(0,TIMEOUT_ID);
     off_screen();
     return STATE_FINAL;
 }
@@ -146,9 +194,8 @@ void feedback_task(void* arg) {
     timer_event_t evt;
     
     //* Init Timers
-    // SSD1306_i2c_bus_init();
+    // SSD1306_i2c_bus_init(); //-> na main pra usar em outra task
     bt_config();
-    // off_screen();
 
     while(1) {
         //receive a timer interrupt
@@ -157,24 +204,18 @@ void feedback_task(void* arg) {
             if(evt.timer_idx == SENSOR_ID){
                 xEventGroupSetBits(sensorsEventGroup, EVT_GRP_FEEDBACK_TIME);
                 cur_state = run_state(STATE_INITIAL, io_num, &answer_data);
-                tg0_timer_init(TIMEOUT_ID, TIMEOUT_INTERVAL_SEC); 
             }
             else if(evt.timer_idx == TIMEOUT_ID){
                 cur_state = run_state(STATE_FINAL, io_num, &answer_data);
-                (void)timer_pause(0,TIMEOUT_ID);
-                //? timer deinit
+                xEventGroupSetBits(sensorsEventGroup, EVT_GRP_FEEDBACK_COMPLETE);
             }
         }
 
         //receive a button interrupt
         if(xQueueReceive(gpio_evt_queue, &io_num, 100)){
             ESP_LOGI(TAG, "GPIO[%d] event received, value: %d", io_num, gpio_get_level(io_num));
-            (void)timer_pause(0,TIMEOUT_ID);
             cur_state = run_state(cur_state, io_num, &answer_data);
-            tg0_timer_init(TIMEOUT_ID, TIMEOUT_INTERVAL_SEC); 
         }
 
-
-        // do other program logic, run other state machines, etc
     }
 }
