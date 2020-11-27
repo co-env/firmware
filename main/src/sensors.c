@@ -5,7 +5,7 @@ static const char *TAG = "SENSORS";
 adc_channel_t mic_channel = ADC_CHANNEL_6;
 
 SemaphoreHandle_t xSemaphore = NULL;
-
+EventGroupHandle_t sensorsEventGroup = NULL;
 
 /******** I2C ********/
 i2c_port_t i2c_num = I2C_MASTER_NUM;
@@ -171,12 +171,15 @@ void color_sensor_task(void *arg) {
                 ESP_LOGI(TAG, " Orange:  %f", as7262_main_sensor.calibrated_values[AS726x_ORANGE]);
                 ESP_LOGI(TAG, " Red:     %f", as7262_main_sensor.calibrated_values[AS726x_RED]);
                 ESP_LOGI(TAG, " ------------------ ");
+                
+                xEventGroupSetBits(sensorsEventGroup, EVT_GRP_COLOR_SENSOR_COMPLETE);
+                vTaskSuspend(NULL);
             } else {
                 xSemaphoreGive(xSemaphore);
             }
         }
 
-        vTaskDelay(5000 / portTICK_RATE_MS);
+        // vTaskDelay(5000 / portTICK_RATE_MS);
     }
 }
 
@@ -214,14 +217,16 @@ void air_sensor_task(void *arg) {
 
     ESP_LOGI(TAG, "SGP30 main task is running...");
     while(1) {
-        vTaskDelay(1000 / portTICK_RATE_MS);
-
         if (xSemaphoreTake(xSemaphore, portMAX_DELAY ) == pdTRUE ) {
             sgp30_IAQ_measure(&sgp30_main_sensor);
             xSemaphoreGive(xSemaphore);
         }
 
         ESP_LOGI(TAG, "TVOC: %d,  eCO2: %d",  sgp30_main_sensor.TVOC, sgp30_main_sensor.eCO2);
+
+        // vTaskDelay(1000 / portTICK_RATE_MS);
+        xEventGroupSetBits(sensorsEventGroup, EVT_GRP_AIR_SENSOR_COMPLETE);
+        vTaskSuspend(NULL);
     }
 }
 
@@ -251,7 +256,6 @@ void bme280_sensor_task(void *arg) {
     else printf("Could not config BME280\n");
     
     while (1) {
-        vTaskDelay(1000 / portTICK_RATE_MS);
 
         if (xSemaphoreTake(xSemaphore, portMAX_DELAY ) == pdTRUE ) {
             erro = bme280_meas_forcedmode(&comp_data);
@@ -266,10 +270,11 @@ void bme280_sensor_task(void *arg) {
             printf("Could not measure :(");
         }
         
-        //! Test only
         // update_display_data(comp_data.temperature, sgp30_main_sensor.TVOC, sgp30_main_sensor.eCO2);
+        // vTaskDelay(1000 / portTICK_RATE_MS);
+        xEventGroupSetBits(sensorsEventGroup, EVT_GRP_TEMP_SENSOR_COMPLETE);
+        vTaskSuspend(NULL);
     }
-
 }
 
 
@@ -283,9 +288,32 @@ void sound_sensor_task(void *arg) {
 
     while(1) {
         (void)get_voltage_variation(mic_channel);
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        // vTaskDelay(pdMS_TO_TICKS(1000));
+        xEventGroupSetBits(sensorsEventGroup, EVT_GRP_SOUND_SENSOR_COMPLETE);
+        vTaskSuspend(NULL);
     }
 }
 
+void main_sensor_task(void *arg){
+    timer_event_t evt;
+    TaskHandle_t color_sensor_th, air_sensor_th, bme_sensor_th, sound_sensor_th;
 
+    //* Init all sensors functions
+    xTaskCreate(color_sensor_task, "color_sensor_main_task", 1024 * 2, (void *)0, 20, &color_sensor_th);
+    xTaskCreate(air_sensor_task, "air_sensor_main_task", 1024 * 2, (void *)0, 15, &air_sensor_th);
+    xTaskCreate(bme280_sensor_task, "bme280_sensor_main_task", 1024 * 2, (void *)0, 15, &bme_sensor_th);
+    xTaskCreate(sound_sensor_task, "sound_sensor_main_task", 1024 * 2, (void *)0, 15, &sound_sensor_th);
+
+    while(1) {
+        if(xQueueReceive(sensor_timer_queue,&evt,100)){
+            printf("Resume tasks:\n");
+            //Resume tasks in sensor timeout
+            vTaskResume(color_sensor_th);
+            vTaskResume(air_sensor_th);
+            vTaskResume(bme_sensor_th);
+            vTaskResume(sound_sensor_th);
+        }
+    }
+}
+ 
 /*@*/

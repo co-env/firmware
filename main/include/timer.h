@@ -21,7 +21,6 @@
 #define FEEDBACK_INTERVAL_SEC   (200.0)
 #define TIMEOUT_INTERVAL_SEC    (62.0) // sample test interval for the first timer
 #define MAX_FEEDBACK_COUNT      (int)(FEEDBACK_INTERVAL_SEC/SENSOR_INTERVAL_SEC)
-#define TEST_WITH_RELOAD      1        // testing will be done with auto reload
 
 /**
  * @brief structure to pass events

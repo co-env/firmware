@@ -19,6 +19,7 @@
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "freertos/queue.h"
+#include "freertos/event_groups.h"
 
 #include "lwip/sockets.h"
 #include "lwip/dns.h"
@@ -62,7 +63,7 @@ void app_main(void) {
 
     // ESP_ERROR_CHECK(esp_netif_init());
     // ESP_ERROR_CHECK(esp_event_loop_create_default());
-    // ESP_ERROR_CHECK(i2c_master_driver_initialize());
+    ESP_ERROR_CHECK(i2c_master_driver_initialize());
     
     // /* This helper function configures Wi-Fi or Ethernet, as selected in menuconfig.
     //  * Read "Establishing Wi-Fi or Ethernet Connection" section in
@@ -77,8 +78,11 @@ void app_main(void) {
     //     ESP_LOGE(TAG, "Bluetooth mesh init failed (err 0x%06x)", err);
     // }
 
-    // xSemaphore = xSemaphoreCreateMutex();
-    // xSemaphoreGive(xSemaphore);
+    xSemaphore = xSemaphoreCreateMutex();
+    xSemaphoreGive(xSemaphore);
+
+    sensorsEventGroup = xEventGroupCreate();
+    xEventGroupClearBits(sensorsEventGroup, 0xff);
 
     // #if CONFIG_COENV_NODE_TYPE_GATEWAY
     // xTaskCreate(gateway_device_task, "gateway_main_task", 1024 * 4, (void *)0, 30, NULL);
@@ -87,12 +91,10 @@ void app_main(void) {
     // #endif
     
     // xTaskCreate(FontDisplayTask, "FontDisplayTask", 1024 * 5, NULL, 5, NULL);
-    
-    // xTaskCreate(color_sensor_task, "color_sensor_main_task", 1024 * 2, (void *)0, 20, NULL);
-    // xTaskCreate(air_sensor_task, "air_sensor_main_task", 1024 * 2, (void *)0, 15, NULL);
-    // xTaskCreate(bme280_sensor_task, "bme280_sensor_main_task", 1024 * 2, (void *)0, 15, NULL);
-    // xTaskCreate(sound_sensor_task, "sound_sensor_main_task", 1024 * 2, (void *)0, 15, NULL);
+    tg0_timer_init(SENSOR_ID, SENSOR_INTERVAL_SEC); 
 
-    xTaskCreate(feedback_task, "feedback_task", 2048, NULL, 10, NULL); //start gpio task
+
+    xTaskCreate(main_sensor_task, "main_sensor_task", 2048, NULL, 10, NULL); //start gpio task
+    // xTaskCreate(feedback_task, "feedback_task", 2048, NULL, 10, NULL); //start gpio task
 
 }

@@ -138,7 +138,6 @@ void feedback_task(void* arg) {
     timer_event_t evt;
     
     //* Init Timers
-    tg0_timer_init(SENSOR_ID, SENSOR_INTERVAL_SEC); 
     // SSD1306_i2c_bus_init();
     bt_config();
     // off_screen();
