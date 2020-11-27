@@ -131,7 +131,7 @@ void gateway_device_task(void *arg) {
     };
     
     //* Syncronized queue where received data is put by the Server Model 
-    ble_mesh_received_data_queue = xQueueCreate(5, sizeof(model_sensor_data_t));
+    ble_mesh_received_data_queue = xQueueCreate(15, sizeof(model_sensor_data_t));
     ESP_LOGW(TAG, "Queue initialization done");
 
     esp_mqtt_client_handle_t client = esp_mqtt_client_init(&mqtt_cfg);
@@ -172,14 +172,14 @@ void gateway_device_task(void *arg) {
 
             //* Sends received data to cloud 
             send_data_to_cloud(client, _received_data);
-            // update_display_data(_own_sensor_data.temperature, _own_sensor_data.tVOC, _own_sensor_data.eCO2);
-            vTaskDelay(2000 / portTICK_RATE_MS);
+            vTaskDelay(1000 / portTICK_RATE_MS);
         }
 
         /**< Updates data from sensor readings */
-        if(xEventGroupWaitBits(sensorsEventGroup,EVT_GRP_BITS, 1, 1, portMAX_DELAY)){
+        if(xEventGroupWaitBits(sensorsEventGroup,EVT_GRP_BITS, 1, 1, 1000 / portTICK_RATE_MS) == pdPASS){
             if(xEventGroupGetBits(sensorsEventGroup) & EVT_GRP_FEEDBACK_TIME){
                 xEventGroupWaitBits(sensorsEventGroup,EVT_GRP_FEEDBACK_COMPLETE, 1, 0, portMAX_DELAY);
+                xEventGroupClearBits(sensorsEventGroup, EVT_GRP_FEEDBACK_TIME);
             }
             _own_sensor_data.eCO2 = sgp30_main_sensor.eCO2;
             _own_sensor_data.tVOC = sgp30_main_sensor.TVOC;
@@ -231,6 +231,7 @@ void node_device_task(void *arg) {
         if(xEventGroupWaitBits(sensorsEventGroup,EVT_GRP_BITS, 1, 1, portMAX_DELAY)){
             if(xEventGroupGetBits(sensorsEventGroup) & EVT_GRP_FEEDBACK_TIME){
                 xEventGroupWaitBits(sensorsEventGroup,EVT_GRP_FEEDBACK_COMPLETE, 1, 0, portMAX_DELAY);
+                xEventGroupClearBits(sensorsEventGroup, EVT_GRP_FEEDBACK_TIME);
             }
             device_data.eCO2 = sgp30_main_sensor.eCO2;
             device_data.tVOC = sgp30_main_sensor.TVOC;
