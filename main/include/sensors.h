@@ -31,8 +31,8 @@
 
 as7262_dev_t as7262_main_sensor;
 sgp30_dev_t sgp30_main_sensor;
-adc_channel_t mic_channel;
 struct bme280_data comp_data; 
+float mic_noise_level;
 
 extern SemaphoreHandle_t xSemaphore;
 

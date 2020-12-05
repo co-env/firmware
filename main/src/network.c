@@ -86,6 +86,7 @@ static esp_err_t send_data_to_cloud(esp_mqtt_client_handle_t mqtt_client, model_
     esp_err_t err;
     char mqtt_topic[14];
 
+    ESP_LOGI(TAG, "%s - sending data...", __FUNCTION__);
     sprintf(mqtt_topic, "devices/%s", sensor_data.device_name);
 
 
@@ -106,15 +107,26 @@ static esp_err_t send_data_to_cloud(esp_mqtt_client_handle_t mqtt_client, model_
     }
 
     /** AS7262 Payload */
+    double lux = sensor_data.red + sensor_data.orange + sensor_data.yellow + sensor_data.green + sensor_data.blue +  sensor_data.violet;
+    lux /= 45 * 0.1464128843338;  //! counts -> uW/cm2 -> lux
+
     memset(payload, 0, strlen(payload));
-    sprintf(payload, "%s,sensor=\"Color\" v=%.2f,b=%.2f,g=%.2f,y=%.2f,o=%.2f,r=%.2f", sensor_data.device_name,
-                sensor_data.violet, sensor_data.blue, sensor_data.green, sensor_data.yellow, sensor_data.orange, sensor_data.red);
+    sprintf(payload, "%s,sensor=\"Color\" v=%.2f,b=%.2f,g=%.2f,y=%.2f,o=%.2f,r=%.2f,lux=%.2f", sensor_data.device_name,
+                sensor_data.violet, sensor_data.blue, sensor_data.green, sensor_data.yellow, sensor_data.orange, sensor_data.red, lux);
+    err = esp_mqtt_client_publish(mqtt_client, mqtt_topic, payload, 0, 0, 0);
+    if (err) {
+        return err;
+    }
+
+    /** Microphone Payload */
+    memset(payload, 0, strlen(payload));
+    sprintf(payload, "%s,sensor=\"Noise\" noise=%u", sensor_data.device_name, sensor_data.noise_level);
     err = esp_mqtt_client_publish(mqtt_client, mqtt_topic, payload, 0, 0, 0);
 
     /** Check to see if there's new feedback content */
     if ((sensor_data.feedback >> 7) & 0x01) {
         //!! Parse feedback content and send it here !!!!
-
+        ESP_LOGW(TAG, "%s - Sending feedback data to cloud", __FUNCTION__);
     }
 
     return err;
@@ -176,8 +188,9 @@ void gateway_device_task(void *arg) {
         }
 
         /**< Updates data from sensor readings */
-        if(xEventGroupWaitBits(sensorsEventGroup,EVT_GRP_BITS, 1, 1, 1000 / portTICK_RATE_MS) == pdPASS){
-            if(xEventGroupGetBits(sensorsEventGroup) & EVT_GRP_FEEDBACK_TIME){
+        if ((xEventGroupWaitBits(sensorsEventGroup,EVT_GRP_BITS, 1, 1, 1000 / portTICK_RATE_MS) & EVT_GRP_BITS) == EVT_GRP_BITS) {
+            /**< Checks if there's a feedback question routine going on */
+            if (xEventGroupGetBits(sensorsEventGroup) & EVT_GRP_FEEDBACK_TIME) {
                 xEventGroupWaitBits(sensorsEventGroup,EVT_GRP_FEEDBACK_COMPLETE, 1, 0, portMAX_DELAY);
                 xEventGroupClearBits(sensorsEventGroup, EVT_GRP_FEEDBACK_TIME);
             }
@@ -185,6 +198,8 @@ void gateway_device_task(void *arg) {
             _own_sensor_data.tVOC = sgp30_main_sensor.TVOC;
             _own_sensor_data.temperature = comp_data.temperature;
             _own_sensor_data.humidity = comp_data.humidity;
+
+            _own_sensor_data.noise_level = (uint16_t)mic_noise_level;
 
             _own_sensor_data.red = as7262_main_sensor.calibrated_values[AS726x_RED];
             _own_sensor_data.orange = as7262_main_sensor.calibrated_values[AS726x_ORANGE];
@@ -203,12 +218,12 @@ void gateway_device_task(void *arg) {
             _own_sensor_data.feedback |= (answer_data.light_comf << 1);
             _own_sensor_data.feedback |= (answer_data.lightness  << 0);  // ( << 0) kkk aaaaaaaa
 
-            //! Debug only
-            ESP_LOGI(TAG, "Feedback data binary: %u %u %u %u %u %u %u %u",
-            (_own_sensor_data.feedback >> 7) & 0x01, (_own_sensor_data.feedback >> 6) & 0x01, 
-            (_own_sensor_data.feedback >> 5) & 0x01, (_own_sensor_data.feedback >> 4) & 0x01, 
-            (_own_sensor_data.feedback >> 3) & 0x01, (_own_sensor_data.feedback >> 2) & 0x01, 
-            (_own_sensor_data.feedback >> 1) & 0x01, (_own_sensor_data.feedback >> 0) & 0x01 );
+            // //! Debug only
+            // ESP_LOGI(TAG, "Feedback data binary: %u %u %u %u %u %u %u %u",
+            // (_own_sensor_data.feedback >> 7) & 0x01, (_own_sensor_data.feedback >> 6) & 0x01, 
+            // (_own_sensor_data.feedback >> 5) & 0x01, (_own_sensor_data.feedback >> 4) & 0x01, 
+            // (_own_sensor_data.feedback >> 3) & 0x01, (_own_sensor_data.feedback >> 2) & 0x01, 
+            // (_own_sensor_data.feedback >> 1) & 0x01, (_own_sensor_data.feedback >> 0) & 0x01 );
 
             //* Sends sensor data to cloud 
             send_data_to_cloud(client, _own_sensor_data);
@@ -227,9 +242,10 @@ void node_device_task(void *arg) {
     };
 
     while (1) {
-
-        if(xEventGroupWaitBits(sensorsEventGroup,EVT_GRP_BITS, 1, 1, portMAX_DELAY)){
-            if(xEventGroupGetBits(sensorsEventGroup) & EVT_GRP_FEEDBACK_TIME){
+        /**< Wait for all sensor tasks complete */
+        if ((xEventGroupWaitBits(sensorsEventGroup,EVT_GRP_BITS, 1, 1, portMAX_DELAY) & EVT_GRP_BITS) == EVT_GRP_BITS) {
+            /**< Checks if there's a feedback question routine going on */
+            if (xEventGroupGetBits(sensorsEventGroup) & EVT_GRP_FEEDBACK_TIME) {
                 xEventGroupWaitBits(sensorsEventGroup,EVT_GRP_FEEDBACK_COMPLETE, 1, 0, portMAX_DELAY);
                 xEventGroupClearBits(sensorsEventGroup, EVT_GRP_FEEDBACK_TIME);
             }
@@ -240,7 +256,7 @@ void node_device_task(void *arg) {
             device_data.humidity = comp_data.humidity;
             device_data.pressure = comp_data.pressure;
 
-            device_data.noise_level = 40;
+            device_data.noise_level = (uint16_t)mic_noise_level;
 
             device_data.red = as7262_main_sensor.calibrated_values[AS726x_RED];
             device_data.orange = as7262_main_sensor.calibrated_values[AS726x_ORANGE];
@@ -260,11 +276,11 @@ void node_device_task(void *arg) {
             device_data.feedback |= (answer_data.lightness  << 0);  // ( << 0) kkk aaaaaaaa
 
             //! Debug only
-            ESP_LOGI(TAG, "Feedback data binary: %u %u %u %u %u %u %u %u",
-            (device_data.feedback >> 7) & 0x01, (device_data.feedback >> 6) & 0x01, 
-            (device_data.feedback >> 5) & 0x01, (device_data.feedback >> 4) & 0x01, 
-            (device_data.feedback >> 3) & 0x01, (device_data.feedback >> 2) & 0x01, 
-            (device_data.feedback >> 1) & 0x01, (device_data.feedback >> 0) & 0x01 );
+            // ESP_LOGI(TAG, "Feedback data binary: %u %u %u %u %u %u %u %u",
+            // (device_data.feedback >> 7) & 0x01, (device_data.feedback >> 6) & 0x01, 
+            // (device_data.feedback >> 5) & 0x01, (device_data.feedback >> 4) & 0x01, 
+            // (device_data.feedback >> 3) & 0x01, (device_data.feedback >> 2) & 0x01, 
+            // (device_data.feedback >> 1) & 0x01, (device_data.feedback >> 0) & 0x01 );
 
             ESP_LOGW(TAG, "Dados dos sensores %s", device_data.device_name);
             ESP_LOGW(TAG, "    Temperatura: %f", device_data.temperature);

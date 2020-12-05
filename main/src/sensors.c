@@ -3,7 +3,7 @@
 
 static const char *TAG = "SENSORS";
 
-adc_channel_t mic_channel = ADC_CHANNEL_6;
+static adc_channel_t mic_channel = ADC_CHANNEL_6;
 
 SemaphoreHandle_t xSemaphore = NULL;
 // EventGroupHandle_t sensorsEventGroup = NULL;
@@ -131,6 +131,12 @@ void color_sensor_task(void *arg) {
     
     vTaskDelay(1000 / portTICK_RATE_MS);
 
+    //! Integration time:  0x3C * 2.8ms = 168ms
+    if (xSemaphoreTake(xSemaphore, portMAX_DELAY) == pdTRUE) {
+        as7262_set_integration_time(&as7262_main_sensor, 0x3C); 
+        xSemaphoreGive(xSemaphore);
+    }
+
     xSemaphoreTake(xSemaphore, portMAX_DELAY);
     as7262_set_led_drv_on(&as7262_main_sensor, true);
     xSemaphoreGive(xSemaphore);
@@ -152,9 +158,12 @@ void color_sensor_task(void *arg) {
 
     // Changing GAIN 
     if (xSemaphoreTake(xSemaphore, portMAX_DELAY ) == pdTRUE ) {
-        as7262_set_gain(&as7262_main_sensor, GAIN_64X);
+        as7262_set_gain(&as7262_main_sensor, GAIN_16X);
         xSemaphoreGive(xSemaphore);
     }
+
+    double total_light = 0;
+    double lux_factor = 0.1464128843338;
 
     while(1) {
         if (xSemaphoreTake(xSemaphore, portMAX_DELAY ) == pdTRUE ) {
@@ -171,6 +180,14 @@ void color_sensor_task(void *arg) {
                 ESP_LOGI(TAG, " Yellow:  %f", as7262_main_sensor.calibrated_values[AS726x_YELLOW]);
                 ESP_LOGI(TAG, " Orange:  %f", as7262_main_sensor.calibrated_values[AS726x_ORANGE]);
                 ESP_LOGI(TAG, " Red:     %f", as7262_main_sensor.calibrated_values[AS726x_RED]);
+                // ESP_LOGI(TAG, " ------------------ ");
+
+                total_light = 0;
+                for (int i = AS726x_VIOLET; i <= AS726x_RED; i++) {
+                    total_light += as7262_main_sensor.calibrated_values[i];
+                }
+                total_light /= 45 * lux_factor;
+                ESP_LOGI(TAG, " LUX:     %f", total_light);
                 ESP_LOGI(TAG, " ------------------ ");
                 
                 xEventGroupSetBits(sensorsEventGroup, EVT_GRP_COLOR_SENSOR_COMPLETE);
@@ -288,8 +305,10 @@ void sound_sensor_task(void *arg) {
     }
 
     while(1) {
-        (void)get_voltage_variation(mic_channel);
+        // (void)get_voltage_variation(mic_channel);
         // vTaskDelay(pdMS_TO_TICKS(1000));
+        mic_noise_level = get_noise_level_db(mic_channel);
+        ESP_LOGI(TAG, "Noise:  %f", mic_noise_level);
         xEventGroupSetBits(sensorsEventGroup, EVT_GRP_SOUND_SENSOR_COMPLETE);
         vTaskSuspend(NULL);
     }
