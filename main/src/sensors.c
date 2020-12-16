@@ -1,6 +1,8 @@
 #include "sensors.h"
 #include "rtos_sync.h"
 
+#define INTEGRATION_TIME 0x3C
+
 static const char *TAG = "SENSORS";
 
 static adc_channel_t mic_channel = ADC_CHANNEL_6;
@@ -122,8 +124,10 @@ void main_delay_us(uint32_t period, void *intf_ptr) {
 
 /**< AS7262 main task */
 void color_sensor_task(void *arg) {
+    const float conv_light_sensor = 41.67;
+    
     ESP_LOGI(TAG, "Color sensor task init");
-    // i2c_master_init();
+    
     if (xSemaphoreTake(xSemaphore, portMAX_DELAY) == pdTRUE ) {
         as7262_init(&as7262_main_sensor, (as7262_read_fptr_t)main_i2c_read, (as7262_write_fptr_t)main_i2c_write);
         xSemaphoreGive(xSemaphore);
@@ -133,7 +137,7 @@ void color_sensor_task(void *arg) {
 
     //! Integration time:  0x3C * 2.8ms = 168ms
     if (xSemaphoreTake(xSemaphore, portMAX_DELAY) == pdTRUE) {
-        as7262_set_integration_time(&as7262_main_sensor, 0x3C); 
+        as7262_set_integration_time(&as7262_main_sensor, INTEGRATION_TIME); 
         xSemaphoreGive(xSemaphore);
     }
 
@@ -162,7 +166,9 @@ void color_sensor_task(void *arg) {
         xSemaphoreGive(xSemaphore);
     }
 
-    double total_light = 0;
+    float light_intensity = 0.0;
+    float lux = 0.0;
+    double light_sum = 0.0;
     double lux_factor = 0.1464128843338;
 
     while(1) {
@@ -182,12 +188,15 @@ void color_sensor_task(void *arg) {
                 ESP_LOGI(TAG, " Red:     %f", as7262_main_sensor.calibrated_values[AS726x_RED]);
                 // ESP_LOGI(TAG, " ------------------ ");
 
-                total_light = 0;
+                light_sum = 0.0;
                 for (int i = AS726x_VIOLET; i <= AS726x_RED; i++) {
-                    total_light += as7262_main_sensor.calibrated_values[i];
+                    light_sum += as7262_main_sensor.calibrated_values[i];
                 }
-                total_light /= 45 * lux_factor;
-                ESP_LOGI(TAG, " LUX:     %f", total_light);
+                light_intensity = (light_sum * 1000)/(INTEGRATION_TIME * AS7262_INTEGRATION_TIME_MULT * 16 * conv_light_sensor); //in uW/cm2
+                lux = light_intensity/lux_factor;
+                // ESP_LOGI(TAG, " Light sum:     %f", light_sum);
+                ESP_LOGI(TAG, " Intensity:     %f", light_intensity);
+                ESP_LOGI(TAG, " LUX:           %f", lux);
                 ESP_LOGI(TAG, " ------------------ ");
                 
                 xEventGroupSetBits(sensorsEventGroup, EVT_GRP_COLOR_SENSOR_COMPLETE);
@@ -326,7 +335,6 @@ void main_sensor_task(void *arg){
 
     while(1) {
         if(xQueueReceive(sensor_timer_queue,&evt,100)){
-            printf("Resume tasks:\n");
             //Resume tasks in sensor timeout
             vTaskResume(color_sensor_th);
             vTaskResume(air_sensor_th);
